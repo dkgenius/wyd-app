@@ -12,6 +12,7 @@ import {
 import * as Location from "expo-location";
 import { WebView } from "react-native-webview";
 import { router } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 const API_BASE = "https://whatyoudink.com";
 
@@ -28,13 +29,12 @@ type ApiLocation = {
     id: number | null;
     slug?: string | null;
     title?: string | null;
-    url?: string | null; // absolute (since you updated to absolute URLs)
+    url?: string | null;
   };
 };
 
 function slugFromBlogUrl(url?: string | null): string | null {
   if (!url) return null;
-  // expects something like https://whatyoudink.com/blog/some-slug
   const m = url.match(/\/blog\/([^/?#]+)/i);
   return m ? m[1] : null;
 }
@@ -94,81 +94,74 @@ export default function HomeScreen() {
       Alert.alert("Missing blog slug", "This location doesn't have a blog slug/url.");
       return;
     }
-
-    // Navigate to in-app blog screen
     router.push({ pathname: "/blog/[slug]", params: { slug } });
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.h1}>What You Dink</Text>
-      <Text style={styles.sub}>
-        Pickleball reviews, courts, clinics, and videos.
-      </Text>
+    <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={styles.h1}>What You Dink</Text>
+        <Text style={styles.sub}>Pickleball reviews, courts, clinics, and videos.</Text>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Featured Video</Text>
-        <View style={styles.videoWrap}>
-          <WebView
-			  source={{ uri: FEATURED_EMBED }}
-			  javaScriptEnabled
-			  domStorageEnabled
-			  allowsFullscreenVideo
-			  mediaPlaybackRequiresUserAction={true}
-			  originWhitelist={["*"]}
-			  setSupportMultipleWindows={false}
-			  style={styles.video}
-			/>
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <View style={styles.rowBetween}>
-          <Text style={styles.sectionTitle}>Nearby Reviews</Text>
-          <Text style={styles.muted}>Tap to open in app</Text>
-        </View>
-
-        {loading ? (
-          <View style={{ paddingVertical: 18 }}>
-            <ActivityIndicator />
-            <Text style={[styles.muted, { marginTop: 10 }]}>
-              Loading nearby courts…
-            </Text>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Featured Video</Text>
+          <View style={styles.videoWrap}>
+            <WebView
+              source={{ uri: FEATURED_EMBED }}
+              javaScriptEnabled
+              domStorageEnabled
+              allowsFullscreenVideo
+              mediaPlaybackRequiresUserAction={true}
+              originWhitelist={["*"]}
+              setSupportMultipleWindows={false}
+              style={styles.video}
+            />
           </View>
-        ) : error ? (
-          <Text style={[styles.muted, { marginTop: 8 }]}>{error}</Text>
-        ) : reviewedNearby.length === 0 ? (
-          <Text style={[styles.muted, { marginTop: 8 }]}>
-            No reviewed courts found nearby.
-          </Text>
-        ) : (
-          reviewedNearby.map((item) => (
-            <Pressable
-              key={item.id}
-              style={styles.card}
-              onPress={() => openBlogInApp(item)}
-            >
-              <Text style={styles.cardTitle}>{item.name}</Text>
-              <Text style={styles.cardMeta}>
-                {item.city}, {item.state}
-                {typeof item.distance_mi === "number"
-                  ? ` • ${item.distance_mi.toFixed(1)} mi`
-                  : ""}
-              </Text>
-              <Text style={styles.cardLink}>
-                Blog: {item.blog?.title || "Open review"}
-              </Text>
-            </Pressable>
-          ))
-        )}
-      </View>
+        </View>
 
-      <View style={{ height: 18 }} />
-    </ScrollView>
+        <View style={styles.section}>
+          <View style={styles.rowBetween}>
+            <Text style={styles.sectionTitle}>Nearby Reviews</Text>
+            <Text style={styles.muted}>Tap to open in app</Text>
+          </View>
+
+          {loading ? (
+            <View style={{ paddingVertical: 18 }}>
+              <ActivityIndicator />
+              <Text style={[styles.muted, { marginTop: 10 }]}>Loading nearby courts…</Text>
+            </View>
+          ) : error ? (
+            <Text style={[styles.muted, { marginTop: 8 }]}>{error}</Text>
+          ) : reviewedNearby.length === 0 ? (
+            <Text style={[styles.muted, { marginTop: 8 }]}>No reviewed courts found nearby.</Text>
+          ) : (
+            reviewedNearby.map((item) => (
+              <Pressable key={item.id} style={styles.card} onPress={() => openBlogInApp(item)}>
+                <Text style={styles.cardTitle}>{item.name}</Text>
+                <Text style={styles.cardMeta}>
+                  {item.city}, {item.state}
+                  {typeof item.distance_mi === "number" ? ` • ${item.distance_mi.toFixed(1)} mi` : ""}
+                </Text>
+                <Text style={styles.cardLink}>
+                  Blog: {item.blog?.title || "Open review"}
+                </Text>
+              </Pressable>
+            ))
+          )}
+        </View>
+
+        <View style={{ height: 18 }} />
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: "#0b0f14" },
   container: { flex: 1, backgroundColor: "#0b0f14" },
   content: { padding: 16, paddingBottom: 28 },
 
@@ -210,9 +203,5 @@ const styles = StyleSheet.create({
   },
   cardTitle: { color: "white", fontSize: 16, fontWeight: "800" },
   cardMeta: { marginTop: 4, color: "rgba(255,255,255,0.65)" },
-  cardLink: {
-    marginTop: 8,
-    color: "rgba(199,255,46,0.9)",
-    fontWeight: "700",
-  },
+  cardLink: { marginTop: 8, color: "rgba(199,255,46,0.9)", fontWeight: "700" },
 });

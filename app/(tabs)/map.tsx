@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+// /app/(tabs)/map.tsx
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -73,6 +74,11 @@ type LocationItem = {
   hours?: Hours | null;
 
   blog?: Blog | null;
+};
+
+type LocationItemUI = LocationItem & {
+  _openNow?: boolean;
+  _totalCourts?: number;
 };
 
 type NearbyResponse = {
@@ -252,6 +258,8 @@ function isOpenNow(loc: LocationItem) {
   return false;
 }
 
+// NOTE: You had ratingNum but you never use it — leaving it out would be fine,
+// but keeping it is harmless.
 function ratingNum(v?: number | null) {
   if (v === null || v === undefined) return "—";
   const n = Number(v);
@@ -312,37 +320,232 @@ function Pill({ text }: { text: string }) {
   );
 }
 
+function inRegion(loc: LocationItem, r: Region) {
+  const latMin = r.latitude - r.latitudeDelta / 2;
+  const latMax = r.latitude + r.latitudeDelta / 2;
+  const lngMin = r.longitude - r.longitudeDelta / 2;
+  const lngMax = r.longitude + r.longitudeDelta / 2;
+  return loc.latitude >= latMin && loc.latitude <= latMax && loc.longitude >= lngMin && loc.longitude <= lngMax;
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number, label = "Timed out") {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(label)), ms);
+    p.then((v) => {
+      clearTimeout(t);
+      resolve(v);
+    }).catch((e) => {
+      clearTimeout(t);
+      reject(e);
+    });
+  });
+}
+
+const Pin = React.memo(function Pin({
+  loc,
+  visited,
+  onSelect,
+}: {
+  loc: LocationItemUI;
+  visited: boolean;
+  onSelect: (loc: LocationItemUI) => void;
+}) {
+  return (
+    <Marker
+      coordinate={{ latitude: loc.latitude, longitude: loc.longitude }}
+      pinColor={visited ? "#C7FF2E" : undefined}
+      onPress={() => onSelect(loc)}
+      tracksViewChanges={false}
+    />
+  );
+});
+
 export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
+  const mapRef = useRef<MapView | null>(null);
+  const regionRef = useRef<Region | null>(null);
+
+  const abortRef = useRef<AbortController | null>(null);
+  const radiusTimer = useRef<any>(null);
+
+  // IMPORTANT: We no longer block the map from rendering while waiting on GPS/API.
+  // loading = "startup" (permissions + first paint)
   const [loading, setLoading] = useState(true);
   const [loadingPins, setLoadingPins] = useState(false);
 
-  const [region, setRegion] = useState<Region>({
+  const [initialRegion, setInitialRegion] = useState<Region>({
     latitude: 39.8283,
     longitude: -98.5795,
     latitudeDelta: 18,
     longitudeDelta: 18,
   });
 
+  const [regionTick, setRegionTick] = useState(0);
+
   const [radiusMiles, setRadiusMiles] = useState(25);
   const [q, setQ] = useState("");
   const [lastUserCoords, setLastUserCoords] = useState<{ lat: number; lng: number } | null>(null);
 
-  const [raw, setRaw] = useState<LocationItem[]>([]);
-  const [selected, setSelected] = useState<LocationItem | null>(null);
+  const [raw, setRaw] = useState<LocationItemUI[]>([]);
+  const [selected, setSelected] = useState<LocationItemUI | null>(null);
 
   const [viewMode, setViewMode] = useState<"map" | "list">("map");
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
+  const bottomPad = insets.bottom + 86;
+  const topPad = insets.top + 8;
+
+  const recenterTo = useCallback((r: Region) => {
+    regionRef.current = r;
+    mapRef.current?.animateToRegion(r, 350);
+    setRegionTick((t) => t + 1);
+  }, []);
+
+  const computeDeltaFromZoom = (zoom?: number) => {
+    const z = clamp(Number(zoom ?? 11), 6, 16);
+    return z >= 14 ? 0.06 : z >= 13 ? 0.09 : z >= 12 ? 0.14 : z >= 11 ? 0.22 : z >= 10 ? 0.35 : 0.6;
+  };
+
+  async function fetchNearby(lat: number, lng: number, radius: number, alsoRecenter: boolean) {
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
+
+    setLoadingPins(true);
+    try {
+      const url = apiUrl(
+        `/api/v1/locations/nearby.php?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}&radius=${encodeURIComponent(
+          radius
+        )}`
+      );
+      const res = await fetch(url, { signal: ac.signal });
+      const data = (await res.json()) as NearbyResponse;
+
+      if (!data.ok) throw new Error(data.error || "Nearby search failed");
+
+      const items = Array.isArray(data.locations) ? data.locations : [];
+
+      // Precompute expensive derived props once per fetch
+      const enhanced: LocationItemUI[] = items.map((l) => ({
+        ...l,
+        _totalCourts: totalCourts(l.courts),
+        _openNow: isOpenNow(l),
+      }));
+
+      setRaw(enhanced);
+
+      if (alsoRecenter && data.center?.lat && data.center?.lng) {
+        const delta = computeDeltaFromZoom(data.center.zoom ?? 11);
+        recenterTo({
+          latitude: data.center.lat,
+          longitude: data.center.lng,
+          latitudeDelta: delta,
+          longitudeDelta: delta,
+        });
+      }
+    } catch (e: any) {
+      if (e?.name === "AbortError") return;
+      throw e;
+    } finally {
+      if (abortRef.current === ac) abortRef.current = null;
+      setLoadingPins(false);
+    }
+  }
+
+  // STARTUP: render map ASAP, then hydrate with last-known + fresh GPS without blocking UI.
+  useEffect(() => {
+    (async () => {
+      try {
+        setLoading(true);
+
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Location needed", "Allow location so we can show courts near you.");
+          setLoading(false);
+          return;
+        }
+
+        // Map can render now (don't wait for GPS or API)
+        setLoading(false);
+
+        // 1) Try last known location first (usually instant)
+        try {
+          const last = await Location.getLastKnownPositionAsync();
+          if (last?.coords?.latitude && last?.coords?.longitude) {
+            const lat = last.coords.latitude;
+            const lng = last.coords.longitude;
+
+            setLastUserCoords({ lat, lng });
+
+            const r: Region = {
+              latitude: lat,
+              longitude: lng,
+              latitudeDelta: 0.25,
+              longitudeDelta: 0.25,
+            };
+            setInitialRegion(r);
+            regionRef.current = r;
+
+            // Start pins load in background (no await)
+            fetchNearby(lat, lng, radiusMiles, false).catch(() => {});
+          }
+        } catch {
+          // ignore
+        }
+
+        // 2) Try to get a fresh fix, but time out so we never block UX
+        try {
+          const pos = await withTimeout(
+            Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+            8000,
+            "Location taking too long"
+          );
+
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          setLastUserCoords({ lat, lng });
+
+          const r: Region = {
+            latitude: lat,
+            longitude: lng,
+            latitudeDelta: 0.25,
+            longitudeDelta: 0.25,
+          };
+
+          // If map already rendered, animate; otherwise, set initial
+          if (regionRef.current) recenterTo(r);
+          else {
+            setInitialRegion(r);
+            regionRef.current = r;
+          }
+
+          fetchNearby(lat, lng, radiusMiles, false).catch(() => {});
+        } catch {
+          // If GPS is slow, user still sees the map.
+          // Optionally: you could show a small banner/toast here.
+        }
+      } catch (e: any) {
+        setLoading(false);
+        Alert.alert("Error", e?.message ?? "Failed to load map.");
+      }
+    })();
+
+    return () => {
+      abortRef.current?.abort();
+      clearTimeout(radiusTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const filtered = useMemo(() => {
-    const passes = (loc: LocationItem) => {
+    const passes = (loc: LocationItemUI) => {
       const isVisited = Number(loc.visited ?? 0) === 1;
 
       if (filters.visitedOnly && !isVisited) return false;
-      if (filters.openNowOnly && !isOpenNow(loc)) return false;
+      if (filters.openNowOnly && !Boolean(loc._openNow)) return false;
 
       if (filters.access !== "any") {
         const t = String(loc.access_type ?? "").toLowerCase();
@@ -357,7 +560,7 @@ export default function MapScreen() {
       }
 
       if (filters.courtsBucket !== "any") {
-        const t = totalCourts(loc.courts);
+        const t = Number(loc._totalCourts ?? totalCourts(loc.courts));
         if (filters.courtsBucket === "1-2" && !(t >= 1 && t <= 2)) return false;
         if (filters.courtsBucket === "3-5" && !(t >= 3 && t <= 5)) return false;
         if (filters.courtsBucket === "6-9" && !(t >= 6 && t <= 9)) return false;
@@ -370,7 +573,7 @@ export default function MapScreen() {
     const list = raw.filter(passes);
 
     const sortKey = filters.sortBy;
-    const sortFn = (a: LocationItem, b: LocationItem) => {
+    const sortFn = (a: LocationItemUI, b: LocationItemUI) => {
       if (sortKey === "distance") {
         const da = typeof a.distance_mi === "number" ? a.distance_mi : Number.POSITIVE_INFINITY;
         const db = typeof b.distance_mi === "number" ? b.distance_mi : Number.POSITIVE_INFINITY;
@@ -381,7 +584,9 @@ export default function MapScreen() {
         const rb = b.rating_overall === null || b.rating_overall === undefined ? -1 : Number(b.rating_overall);
         return rb - ra;
       }
-      return totalCourts(b.courts) - totalCourts(a.courts);
+      const ca = Number(a._totalCourts ?? totalCourts(a.courts));
+      const cb = Number(b._totalCourts ?? totalCourts(b.courts));
+      return cb - ca;
     };
 
     const visited = list.filter((l) => Number(l.visited ?? 0) === 1).sort(sortFn);
@@ -389,78 +594,32 @@ export default function MapScreen() {
     return [...visited, ...notVisited];
   }, [raw, filters]);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        setLoading(true);
+  const visiblePins = useMemo(() => {
+    const r = regionRef.current;
+    if (!r) return filtered.slice(0, 250);
 
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== "granted") {
-          Alert.alert("Location needed", "Allow location so we can show courts near you.");
-          setLoading(false);
-          return;
-        }
+    const zoomedOut = r.latitudeDelta > 3 || r.longitudeDelta > 3;
+    const cap = zoomedOut ? 250 : 500;
 
-        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-
-        setLastUserCoords({ lat, lng });
-
-        setRegion({
-          latitude: lat,
-          longitude: lng,
-          latitudeDelta: 0.25,
-          longitudeDelta: 0.25,
-        });
-
-        await fetchNearby(lat, lng, radiusMiles, true);
-      } catch (e: any) {
-        Alert.alert("Error", e?.message ?? "Failed to load map.");
-      } finally {
-        setLoading(false);
-      }
-    })();
+    return filtered.filter((l) => inRegion(l, r)).slice(0, cap);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  async function fetchNearby(lat: number, lng: number, radius: number, alsoRecenter: boolean) {
-    setLoadingPins(true);
-    try {
-      const url = apiUrl(
-        `/api/v1/locations/nearby.php?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}&radius=${encodeURIComponent(
-          radius
-        )}`
-      );
-      const res = await fetch(url);
-      const data = (await res.json()) as NearbyResponse;
-
-      if (!data.ok) throw new Error(data.error || "Nearby search failed");
-
-      const items = Array.isArray(data.locations) ? data.locations : [];
-      setRaw(items);
-
-      if (alsoRecenter && data.center?.lat && data.center?.lng) {
-        const z = clamp(Number(data.center.zoom ?? 11), 6, 16);
-        const delta = z >= 14 ? 0.06 : z >= 13 ? 0.09 : z >= 12 ? 0.14 : z >= 11 ? 0.22 : z >= 10 ? 0.35 : 0.6;
-        setRegion({
-          latitude: data.center.lat,
-          longitude: data.center.lng,
-          latitudeDelta: delta,
-          longitudeDelta: delta,
-        });
-      }
-    } finally {
-      setLoadingPins(false);
-    }
-  }
+  }, [filtered, regionTick]);
 
   function onPressNearMe() {
     if (!lastUserCoords) {
       Alert.alert("Location", "We don’t have your location yet. Try again in a moment.");
       return;
     }
-    fetchNearby(lastUserCoords.lat, lastUserCoords.lng, radiusMiles, true).catch((e) =>
+
+    const r: Region = {
+      latitude: lastUserCoords.lat,
+      longitude: lastUserCoords.lng,
+      latitudeDelta: 0.25,
+      longitudeDelta: 0.25,
+    };
+    recenterTo(r);
+
+    fetchNearby(lastUserCoords.lat, lastUserCoords.lng, radiusMiles, false).catch((e) =>
       Alert.alert("Error", e?.message ?? "Failed")
     );
   }
@@ -468,7 +627,13 @@ export default function MapScreen() {
   function onRadiusChange(delta: number) {
     const next = clamp(radiusMiles + delta, 5, 200);
     setRadiusMiles(next);
-    if (lastUserCoords) fetchNearby(lastUserCoords.lat, lastUserCoords.lng, next, false).catch(() => {});
+
+    if (!lastUserCoords) return;
+
+    clearTimeout(radiusTimer.current);
+    radiusTimer.current = setTimeout(() => {
+      fetchNearby(lastUserCoords.lat, lastUserCoords.lng, next, false).catch(() => {});
+    }, 250);
   }
 
   function activeFiltersLabel() {
@@ -481,9 +646,6 @@ export default function MapScreen() {
     if (filters.sortBy !== "distance") parts.push(`Sort: ${filters.sortBy === "rating" ? "Rating" : "Courts"}`);
     return parts.join(" • ");
   }
-
-  const bottomPad = insets.bottom + 86;
-  const topPad = insets.top + 8;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
@@ -528,6 +690,7 @@ export default function MapScreen() {
           </View>
 
           {loadingPins ? <ActivityIndicator style={{ marginLeft: 6 }} /> : <Pill text={`${filtered.length} shown`} />}
+          {viewMode === "map" ? <Pill text={`${visiblePins.length} pins`} /> : null}
         </View>
 
         {!!activeFiltersLabel() && (
@@ -537,31 +700,46 @@ export default function MapScreen() {
         )}
       </View>
 
-      {loading ? (
-        <View style={styles.loading}>
-          <ActivityIndicator />
-          <Text style={styles.loadingText}>Loading map…</Text>
-        </View>
-      ) : viewMode === "map" ? (
+      {/* MAP/LIST AREA */}
+      {viewMode === "map" ? (
         <View style={styles.mapWrap}>
+          {/* Render the map immediately; never block on GPS/API */}
           <MapView
-            style={StyleSheet.absoluteFill}
-            provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
-            region={region}
-            onRegionChangeComplete={setRegion}
-          >
-            {filtered.map((loc) => {
+			  ref={(r) => (mapRef.current = r)}
+			  style={StyleSheet.absoluteFill}
+			  provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
+			  initialRegion={initialRegion}
+			  showsUserLocation
+			  showsMyLocationButton={Platform.OS === "android"}
+			  showsCompass
+			  onRegionChangeComplete={(r) => {
+				regionRef.current = r;
+				setRegionTick((t) => t + 1);
+			  }}
+			>
+            {visiblePins.map((loc) => {
               const visited = Number(loc.visited ?? 0) === 1;
-              return (
-                <Marker
-                  key={loc.id}
-                  coordinate={{ latitude: loc.latitude, longitude: loc.longitude }}
-                  pinColor={visited ? "#C7FF2E" : undefined}
-                  onPress={() => setSelected(loc)}
-                />
-              );
+              return <Pin key={loc.id} loc={loc} visited={visited} onSelect={setSelected} />;
             })}
           </MapView>
+
+          {/* Overlay while we’re still in "startup" (permissions) */}
+          {loading ? (
+            <View style={styles.overlay}>
+              <ActivityIndicator />
+              <Text style={styles.overlayText}>Starting…</Text>
+            </View>
+          ) : null}
+
+          {/* Overlay while pins are loading */}
+          {loadingPins ? (
+            <View style={[styles.overlay, { top: 12, bottom: undefined, alignItems: "flex-start" }]}>
+              <View style={styles.overlayPill}>
+                <ActivityIndicator />
+                <Text style={styles.overlayPillText}>Loading locations…</Text>
+              </View>
+            </View>
+          ) : null}
 
           <View style={{ height: bottomPad }} pointerEvents="none" />
         </View>
@@ -572,9 +750,15 @@ export default function MapScreen() {
           contentContainerStyle={{ padding: 14, paddingBottom: bottomPad }}
           renderItem={({ item }) => <ResultCard item={item} onPress={() => setSelected(item)} />}
           ListEmptyComponent={<Text style={styles.empty}>No locations match your filters.</Text>}
+          removeClippedSubviews
+          windowSize={7}
+          initialNumToRender={10}
+          maxToRenderPerBatch={12}
+          updateCellsBatchingPeriod={50}
         />
       )}
 
+      {/* DETAILS MODAL */}
       <Modal visible={!!selected} animationType="slide" onRequestClose={() => setSelected(null)}>
         <SafeAreaView style={styles.modalSafe} edges={["top", "left", "right"]}>
           <View style={[styles.modalHeader, { paddingTop: insets.top ? 8 : 12 }]}>
@@ -583,6 +767,7 @@ export default function MapScreen() {
               <Text style={styles.modalCloseText}>Close</Text>
             </Pressable>
           </View>
+
           {selected ? (
             <DetailsPanel
               loc={selected}
@@ -608,6 +793,7 @@ export default function MapScreen() {
         </SafeAreaView>
       </Modal>
 
+      {/* FILTERS MODAL */}
       <Modal visible={filtersOpen} animationType="slide" onRequestClose={() => setFiltersOpen(false)}>
         <SafeAreaView style={styles.modalSafe} edges={["top", "left", "right"]}>
           <View style={[styles.modalHeader, { paddingTop: insets.top ? 8 : 12 }]}>
@@ -626,7 +812,10 @@ export default function MapScreen() {
               label="Access"
               value={filters.access === "any" ? "All" : filters.access === "public" ? "Free/Public" : "Membership/Paid"}
               onPress={() =>
-                setFilters((f) => ({ ...f, access: f.access === "any" ? "public" : f.access === "public" ? "paid" : "any" }))
+                setFilters((f) => ({
+                  ...f,
+                  access: f.access === "any" ? "public" : f.access === "public" ? "paid" : "any",
+                }))
               }
               hint="Tap to cycle"
             />
@@ -664,14 +853,25 @@ export default function MapScreen() {
               hint="Tap to cycle"
             />
 
-            <ToggleRow label="Open now" value={filters.openNowOnly} onToggle={() => setFilters((f) => ({ ...f, openNowOnly: !f.openNowOnly }))} />
-            <ToggleRow label="Visited only" value={filters.visitedOnly} onToggle={() => setFilters((f) => ({ ...f, visitedOnly: !f.visitedOnly }))} />
+            <ToggleRow
+              label="Open now"
+              value={filters.openNowOnly}
+              onToggle={() => setFilters((f) => ({ ...f, openNowOnly: !f.openNowOnly }))}
+            />
+            <ToggleRow
+              label="Visited only"
+              value={filters.visitedOnly}
+              onToggle={() => setFilters((f) => ({ ...f, visitedOnly: !f.visitedOnly }))}
+            />
 
             <FilterRow
               label="Sort by"
               value={filters.sortBy === "distance" ? "Distance" : filters.sortBy === "rating" ? "Rating" : "Courts"}
               onPress={() =>
-                setFilters((f) => ({ ...f, sortBy: f.sortBy === "distance" ? "rating" : f.sortBy === "rating" ? "courts" : "distance" }))
+                setFilters((f) => ({
+                  ...f,
+                  sortBy: f.sortBy === "distance" ? "rating" : f.sortBy === "rating" ? "courts" : "distance",
+                }))
               }
               hint="Tap to cycle"
             />
@@ -682,7 +882,7 @@ export default function MapScreen() {
   );
 }
 
-function ResultCard({ item, onPress }: { item: LocationItem; onPress: () => void }) {
+function ResultCard({ item, onPress }: { item: LocationItemUI; onPress: () => void }) {
   const visited = Number(item.visited ?? 0) === 1;
 
   return (
@@ -720,7 +920,7 @@ function DetailsPanel({
   onOpenBlog,
   onOpenYouTube,
 }: {
-  loc: LocationItem;
+  loc: LocationItemUI;
   onOpenBlog: () => void;
   onOpenYouTube: () => void;
 }) {
@@ -735,6 +935,8 @@ function DetailsPanel({
   const tz = String(h?.tz ?? "").trim() || Intl.DateTimeFormat().resolvedOptions().timeZone;
   const now = getNowPartsInTZ(tz);
   const todayKey = now?.dayKey || null;
+
+  // Recompute so it stays accurate even if app sits open
   const openNow = isOpenNow(loc);
 
   const addr = [loc.address, loc.city, loc.state, loc.zip].filter(Boolean).join(", ");
@@ -1090,14 +1292,27 @@ const styles = StyleSheet.create({
   linkRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8 },
   linkText: { color: "rgba(199,255,46,0.95)", fontWeight: "850" },
 
-  hoursRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.06)" },
+  hoursRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 7,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.06)",
+  },
   hoursRowToday: { backgroundColor: "rgba(199,255,46,0.08)", borderRadius: 10, paddingHorizontal: 10 },
   hoursDay: { color: "rgba(255,255,255,0.80)", fontWeight: "900" },
   hoursDayToday: { color: "rgba(199,255,46,0.95)" },
   hoursTime: { color: "rgba(255,255,255,0.70)", fontWeight: "650" },
   hoursTimeToday: { color: "rgba(255,255,255,0.85)" },
 
-  subRatingRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.06)" },
+  subRatingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.06)",
+  },
   subRatingLabel: { color: "rgba(255,255,255,0.85)", fontWeight: "900", width: 92 },
 
   ball: {
