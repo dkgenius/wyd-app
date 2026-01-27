@@ -14,6 +14,15 @@
     },
     "android": {
       "package": "com.whatyoudink.app",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyBsc1F6_BI4BUmtkpWJoTnWSi_s1XHvvTw"
+        }
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -29,6 +38,12 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow location to show courts near you."
+        }
+      ],
       [
         "expo-splash-screen",
         {
