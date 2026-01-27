@@ -43,7 +43,7 @@ const SECTIONS: Section[] = [
   {
     key: "drills",
     title: "Drills",
-    subtitle: "Practice plans by number of players.",
+    subtitle: "Practice Drills with any number of players.",
     filters: "drills_people",
     items: [
       { id: "drill-1a", title: "Solo Wall Dinks", description: "Touch + control drill.", duration: "4:20", people: 1, tags: ["dinks"] },
@@ -56,7 +56,7 @@ const SECTIONS: Section[] = [
   {
     key: "modes",
     title: "Game Modes",
-    subtitle: "Different ways to play: singles, doubles, etc.",
+    subtitle: "Different ways to play: singles, doubles, King of the Court, etc.",
     items: [
       { id: "mode-singles", title: "Singles Basics", description: "Movement + strategy.", duration: "7:40", tags: ["singles"] },
       { id: "mode-doubles", title: "Doubles Basics", description: "Positioning + teamwork.", duration: "8:10", tags: ["doubles"] },
@@ -190,7 +190,7 @@ export default function ClinicTab() {
             <View style={styles.comingSoonInline}>
               <Text style={styles.comingSoonTitle}>Coming Soon</Text>
               <Text style={styles.comingSoonSub}>
-                These are placeholder lessons. Hook this up to your API when your video library is ready.
+                These are placeholder lessons.
               </Text>
             </View>
           </View>
