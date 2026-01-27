@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from "react-native-maps";
 import * as Location from "expo-location";
+import { useEffect, useState } from "react";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -361,6 +362,22 @@ const Pin = React.memo(function Pin({
 });
 
 export default function MapScreen() {
+	  const [hasLocationPermission, setHasLocationPermission] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (mounted) setHasLocationPermission(status === "granted");
+      } catch {
+        if (mounted) setHasLocationPermission(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
@@ -709,8 +726,8 @@ export default function MapScreen() {
 			  style={StyleSheet.absoluteFill}
 			  provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
 			  initialRegion={initialRegion}
-			  showsUserLocation
-			  showsMyLocationButton={Platform.OS === "android"}
+			  showsUserLocation={hasLocationPermission}
+				showsMyLocationButton={Platform.OS === "android" && hasLocationPermission}
 			  showsCompass
 			  onRegionChangeComplete={(r) => {
 				regionRef.current = r;
