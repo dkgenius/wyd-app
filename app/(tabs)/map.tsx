@@ -760,29 +760,29 @@ export default function MapScreen() {
         <View style={styles.mapWrap}>
           {/* Render the map immediately; never block on GPS/API */}
           <MapView
-			  ref={(r) =>
-{lastUserCoords ? (
-  <Circle
-    center={{ latitude: lastUserCoords.lat, longitude: lastUserCoords.lng }}
-    radius={radiusMiles * 1609.34}
-    strokeWidth={2}
-    strokeColor="rgba(199,255,46,0.65)"
-    fillColor="rgba(199,255,46,0.12)"
-  />
-) : null}
-
- (mapRef.current = r)}
-			  style={StyleSheet.absoluteFill}
-			  provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
-			  initialRegion={initialRegion}
-			  showsUserLocation={hasLocationPermission}
-				showsMyLocationButton={Platform.OS === "android" && hasLocationPermission}
-			  showsCompass
-			  onRegionChangeComplete={(r) => {
-				regionRef.current = r;
-				setRegionTick((t) => t + 1);
-			  }}
-			>
+            ref={(r) => {
+              mapRef.current = r;
+            }}
+            style={StyleSheet.absoluteFill}
+            provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
+            initialRegion={initialRegion}
+            showsUserLocation={hasLocationPermission}
+            showsMyLocationButton={Platform.OS === "android" && hasLocationPermission}
+            showsCompass
+            onRegionChangeComplete={(r) => {
+              regionRef.current = r;
+              setRegionTick((t) => t + 1);
+            }}
+          >
+            {lastUserCoords ? (
+              <Circle
+                center={{ latitude: lastUserCoords.lat, longitude: lastUserCoords.lng }}
+                radius={radiusMiles * 1609.34}
+                strokeWidth={2}
+                strokeColor="rgba(199,255,46,0.65)"
+                fillColor="rgba(199,255,46,0.12)"
+              />
+            ) : null}
             {visiblePins.map((loc) => {
               const visited = Number(loc.visited ?? 0) === 1;
               return <Pin key={loc.id} loc={loc} visited={visited} onSelect={setSelected} />;
