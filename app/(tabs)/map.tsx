@@ -14,7 +14,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import MapView, { Marker, PROVIDER_GOOGLE, Region } from "react-native-maps";
+import MapView, { Circle, Marker, PROVIDER_GOOGLE, Region } from "react-native-maps";
 import * as Location from "expo-location";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -74,6 +74,8 @@ type LocationItem = {
   hours?: Hours | null;
 
   blog?: Blog | null;
+
+  skill_levels?: string[] | string | null;
 };
 
 type LocationItemUI = LocationItem & {
@@ -95,6 +97,7 @@ type Filters = {
   openNowOnly: boolean;
   courtsBucket: "any" | "1-2" | "3-5" | "6-9" | "10+";
   sortBy: "distance" | "rating" | "courts";
+  skillLevels: string[];
 };
 
 const DEFAULT_FILTERS: Filters = {
@@ -104,6 +107,7 @@ const DEFAULT_FILTERS: Filters = {
   openNowOnly: false,
   courtsBucket: "any",
   sortBy: "distance",
+  skillLevels: [],
 };
 
 const clamp = (n: number, a: number, b: number) => Math.max(a, Math.min(b, n));
@@ -154,6 +158,37 @@ function accessText(t?: string | null) {
   if (v === "public") return "Public";
   if (v === "paid") return "Membership/Paid";
   return "—";
+}
+
+
+const SKILL_LABELS: Record<string, string> = {
+  beginner: "Beginner (<3.0)",
+  intermediate: "Intermediate (3.0–3.5)",
+  adv_intermediate: "Advanced Intermediate (3.5–4.0)",
+  advanced: "Advanced (4.0+)",
+  pro: "Pro (5.0+)",
+};
+
+function getSkillLevelsArray(loc: LocationItemUI) {
+  const v: any = (loc as any)?.skill_levels ?? (loc as any)?.skillLevels ?? null;
+  if (!v) return [];
+  if (Array.isArray(v)) return v.map(String);
+  if (typeof v === "string") {
+    const s = v.trim();
+    if (!s) return [];
+    try {
+      const parsed = JSON.parse(s);
+      if (Array.isArray(parsed)) return parsed.map(String);
+    } catch {}
+    return s.split(",").map((x) => x.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+function skillLevelsText(loc: LocationItemUI) {
+  const arr = getSkillLevelsArray(loc).filter((k) => SKILL_LABELS[k]);
+  if (!arr.length) return "";
+  return arr.map((k) => SKILL_LABELS[k]).join(" • ");
 }
 
 function parseHHMMSS(t?: string | null) {
@@ -307,7 +342,7 @@ function RatingBalls({ value, size = "md" }: { value: number | null | undefined;
 function StarBadge() {
   return (
     <View style={styles.badgeVisited}>
-      <Text style={styles.badgeVisitedText}>★ Visited</Text>
+      <Text style={styles.badgeVisitedText}>★ Verified</Text>
     </View>
   );
 }
@@ -658,7 +693,11 @@ export default function MapScreen() {
     if (filters.courtType !== "any") parts.push(filters.courtType === "indoor" ? "Indoor" : "Outdoor");
     if (filters.courtsBucket !== "any") parts.push(`Courts: ${filters.courtsBucket}`);
     if (filters.openNowOnly) parts.push("Open now");
-    if (filters.visitedOnly) parts.push("Visited only");
+    if (filters.visitedOnly) parts.push("Verified only");
+    if (filters.skillLevels?.length) {
+      const nice = filters.skillLevels.map((k) => SKILL_LABELS[k] || k).join(", ");
+      parts.push(`Skill: ${nice}`);
+    }
     if (filters.sortBy !== "distance") parts.push(`Sort: ${filters.sortBy === "rating" ? "Rating" : "Courts"}`);
     return parts.join(" • ");
   }
@@ -721,7 +760,18 @@ export default function MapScreen() {
         <View style={styles.mapWrap}>
           {/* Render the map immediately; never block on GPS/API */}
           <MapView
-			  ref={(r) => (mapRef.current = r)}
+			  ref={(r) =>
+{lastUserCoords ? (
+  <Circle
+    center={{ latitude: lastUserCoords.lat, longitude: lastUserCoords.lng }}
+    radius={radiusMiles * 1609.34}
+    strokeWidth={2}
+    strokeColor="rgba(199,255,46,0.65)"
+    fillColor="rgba(199,255,46,0.12)"
+  />
+) : null}
+
+ (mapRef.current = r)}
 			  style={StyleSheet.absoluteFill}
 			  provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
 			  initialRegion={initialRegion}
@@ -875,12 +925,28 @@ export default function MapScreen() {
               onToggle={() => setFilters((f) => ({ ...f, openNowOnly: !f.openNowOnly }))}
             />
             <ToggleRow
-              label="Visited only"
+              label="Verified only"
               value={filters.visitedOnly}
               onToggle={() => setFilters((f) => ({ ...f, visitedOnly: !f.visitedOnly }))}
             />
 
             <FilterRow
+
+<Text style={[styles.filterSectionTitle, { marginTop: 10 }]}>Skill level</Text>
+{(["beginner", "intermediate", "adv_intermediate", "advanced", "pro"] as const).map((k) => (
+  <ToggleRow
+    key={k}
+    label={SKILL_LABELS[k]}
+    value={filters.skillLevels.includes(k)}
+    onToggle={() =>
+      setFilters((f) => ({
+        ...f,
+        skillLevels: f.skillLevels.includes(k) ? f.skillLevels.filter((x) => x !== k) : [...f.skillLevels, k],
+      }))
+    }
+  />
+))}
+
               label="Sort by"
               value={filters.sortBy === "distance" ? "Distance" : filters.sortBy === "rating" ? "Rating" : "Courts"}
               onPress={() =>
@@ -924,7 +990,13 @@ function ResultCard({ item, onPress }: { item: LocationItemUI; onPress: () => vo
         <Text style={styles.dot}>•</Text>
         <Text style={styles.cardMetaStrong}>Access:</Text>
         <Text style={styles.cardMeta}>{accessText(item.access_type)}</Text>
-      </View>
+      
+{(() => {
+  const s = skillLevelsText(item);
+  return s ? <Text style={[styles.cardMeta, { marginTop: 6 }]}>Skill: {s}</Text> : null;
+})()}
+
+</View>
 
       {item.summary ? <Text style={[styles.cardMeta, { marginTop: 8 }]}>{item.summary}</Text> : null}
     </Pressable>
@@ -991,22 +1063,39 @@ function DetailsPanel({
 
         <View style={{ marginTop: 10 }}>
           <Text style={styles.detailsLine}>Courts: {courtsText(loc.courts)}</Text>
+{(() => {
+  const s = skillLevelsText(loc);
+  return s ? <Text style={styles.detailsLine}>Skill: {s}</Text> : null;
+})()}
           <Text style={styles.detailsLine}>Access: {accessText(loc.access_type)}</Text>
           {loc.summary ? <Text style={[styles.detailsLine, { marginTop: 8 }]}>{loc.summary}</Text> : null}
         </View>
 
-        <View style={styles.ctaRow}>
-          <Pressable style={styles.ctaPrimary} onPress={onOpenBlog}>
-            <Ionicons name="newspaper-outline" size={18} color="#071018" />
-            <Text style={styles.ctaPrimaryText}>Read article</Text>
-          </Pressable>
+        {(() => {
+  const hasBlog = !!(loc.blog?.slug || loc.blog?.url);
+  const hasYouTube = !!String(loc.youtube_url ?? "").trim();
 
-          <Pressable style={styles.ctaYouTube} onPress={onOpenYouTube}>
-            <Ionicons name="logo-youtube" size={18} color="white" />
-            <Text style={styles.ctaYouTubeText}>Watch YouTube</Text>
-          </Pressable>
-        </View>
-      </View>
+  if (!hasBlog && !hasYouTube) return null;
+
+  return (
+    <View style={styles.ctaRow}>
+      {hasBlog ? (
+        <Pressable style={styles.ctaPrimary} onPress={onOpenBlog}>
+          <Ionicons name="newspaper-outline" size={18} color="#071018" />
+          <Text style={styles.ctaPrimaryText}>Read article</Text>
+        </Pressable>
+      ) : null}
+
+      {hasYouTube ? (
+        <Pressable style={styles.ctaYouTube} onPress={onOpenYouTube}>
+          <Ionicons name="logo-youtube" size={18} color="white" />
+          <Text style={styles.ctaYouTubeText}>Watch YouTube</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+})()}
+</View>
 
       <View style={styles.detailsBlock}>
         <Text style={styles.detailsBlockTitle}>Contact</Text>
