@@ -759,30 +759,31 @@ export default function MapScreen() {
       {viewMode === "map" ? (
         <View style={styles.mapWrap}>
           {/* Render the map immediately; never block on GPS/API */}
-                    <MapView
-            ref={(r) => (mapRef.current = r)}
-            style={StyleSheet.absoluteFill}
-            provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
-            initialRegion={initialRegion}
-            showsUserLocation={hasLocationPermission}
-            showsMyLocationButton={Platform.OS === "android" && hasLocationPermission}
-            showsCompass
-            onRegionChangeComplete={(r) => {
-            regionRef.current = r;
-            setRegionTick((t) => t + 1);
-            }}
-            >
-            {lastUserCoords ? (
-              <Circle
-                center={{ latitude: lastUserCoords.lat, longitude: lastUserCoords.lng }}
-                radius={radiusMiles * 1609.34}
-                strokeWidth={2}
-                strokeColor="rgba(199,255,46,0.65)"
-                fillColor="rgba(199,255,46,0.12)"
-              />
-            ) : null}
+          <MapView
+			  ref={(r) =>
+{lastUserCoords ? (
+  <Circle
+    center={{ latitude: lastUserCoords.lat, longitude: lastUserCoords.lng }}
+    radius={radiusMiles * 1609.34}
+    strokeWidth={2}
+    strokeColor="rgba(199,255,46,0.65)"
+    fillColor="rgba(199,255,46,0.12)"
+  />
+) : null}
 
-{visiblePins.map((loc) => {
+ (mapRef.current = r)}
+			  style={StyleSheet.absoluteFill}
+			  provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
+			  initialRegion={initialRegion}
+			  showsUserLocation={hasLocationPermission}
+				showsMyLocationButton={Platform.OS === "android" && hasLocationPermission}
+			  showsCompass
+			  onRegionChangeComplete={(r) => {
+				regionRef.current = r;
+				setRegionTick((t) => t + 1);
+			  }}
+			>
+            {visiblePins.map((loc) => {
               const visited = Number(loc.visited ?? 0) === 1;
               return <Pin key={loc.id} loc={loc} visited={visited} onSelect={setSelected} />;
             })}
@@ -929,23 +930,25 @@ export default function MapScreen() {
               onToggle={() => setFilters((f) => ({ ...f, visitedOnly: !f.visitedOnly }))}
             />
 
+
+            <Text style={[styles.filterSectionTitle, { marginTop: 10 }]}>Skill level</Text>
+            {(["beginner", "intermediate", "adv_intermediate", "advanced", "pro"] as const).map((k) => (
+              <ToggleRow
+                key={k}
+                label={SKILL_LABELS[k]}
+                value={filters.skillLevels.includes(k)}
+                onToggle={() =>
+                  setFilters((f) => ({
+                    ...f,
+                    skillLevels: f.skillLevels.includes(k)
+                      ? f.skillLevels.filter((x) => x !== k)
+                      : [...f.skillLevels, k],
+                  }))
+                }
+              />
+            ))}
+
             <FilterRow
-
-<Text style={[styles.filterSectionTitle, { marginTop: 10 }]}>Skill level</Text>
-{(["beginner", "intermediate", "adv_intermediate", "advanced", "pro"] as const).map((k) => (
-  <ToggleRow
-    key={k}
-    label={SKILL_LABELS[k]}
-    value={filters.skillLevels.includes(k)}
-    onToggle={() =>
-      setFilters((f) => ({
-        ...f,
-        skillLevels: f.skillLevels.includes(k) ? f.skillLevels.filter((x) => x !== k) : [...f.skillLevels, k],
-      }))
-    }
-  />
-))}
-
               label="Sort by"
               value={filters.sortBy === "distance" ? "Distance" : filters.sortBy === "rating" ? "Rating" : "Courts"}
               onPress={() =>
