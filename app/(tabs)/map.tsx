@@ -186,6 +186,14 @@ function getSkillLevelsArray(loc: LocationItemUI) {
   return [];
 }
 
+function normSkillKey(s: string) {
+  return String(s ?? "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "_")
+    .replace(/-+/g, "_");
+}
+
 function skillLevelsText(loc: LocationItemUI) {
   const arr = getSkillLevelsArray(loc).filter((k) => SKILL_LABELS[k]);
   if (!arr.length) return "";
@@ -669,6 +677,13 @@ export default function MapScreen() {
         if (filters.courtsBucket === "3-5" && !(t >= 3 && t <= 5)) return false;
         if (filters.courtsBucket === "6-9" && !(t >= 6 && t <= 9)) return false;
         if (filters.courtsBucket === "10+" && !(t >= 10)) return false;
+      }
+
+
+      if (filters.skillLevels?.length) {
+        const selected = filters.skillLevels.map(normSkillKey);
+        const locLevels = getSkillLevelsArray(loc).map(normSkillKey);
+        if (!locLevels.some((k) => selected.includes(k))) return false;
       }
 
       return true;
@@ -1168,8 +1183,8 @@ function DetailsPanel({
   const now = getNowPartsInTZ(tz);
   const todayKey = now?.dayKey || null;
 
-  // Recompute so it stays accurate even if app sits open
-  const openNow = isOpenNow(loc);
+  // Keep consistent with list/open badges
+  const openNow = typeof loc._openNow === "boolean" ? loc._openNow : isOpenNow(loc);
 
   const todayRowStyle = openNow ? styles.hoursRowTodayOpen : styles.hoursRowTodayClosed;
   const todayDayStyle = openNow ? styles.hoursDayTodayOpen : styles.hoursDayTodayClosed;
