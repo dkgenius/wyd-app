@@ -1,39 +1,51 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
-  Dimensions,
+  Easing,
+  Image,
+  Linking,
   Modal,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
-  ActivityIndicator,
-  Image,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { FontAwesome6 } from "@expo/vector-icons";
 
-const { width } = Dimensions.get("window");
+/**
+ * Fix for "text cut off / centering off":
+ * Your slides were using Dimensions.get("window").width, but the modal card is only 92% width.
+ * That mismatch makes each page wider than the container, so the right side gets clipped.
+ *
+ * This version measures the card width via onLayout and uses THAT for paging + scrollTo.
+ */
 
-export default function OnboardingModal({ visible, onDone, appVersion }) {
+const THEME = {
+  backdrop: "rgba(0,0,0,0.62)",
+  cardBg: "#0B0F1A",
+  cardBorder: "rgba(255,255,255,0.10)",
+  title: "#FFFFFF",
+  body: "rgba(255,255,255,0.82)",
+  dot: "rgba(255,255,255,0.22)",
+  dotActive: "rgba(255,255,255,0.85)",
+  btnBg: "rgba(255,255,255,0.08)",
+  btnBorder: "rgba(255,255,255,0.14)",
+  btnText: "#FFFFFF",
+  btnPrimaryBg: "#FFFFFF",
+  btnPrimaryText: "#0B0F1A",
+};
+
+export default function OnboardingModal({ visible, onDone }) {
   const scrollRef = useRef(null);
   const [page, setPage] = useState(0);
 
-  // Gentle "beating" animation for the logo while the modal is open (also doubles as a nice first impression).
-  const scale = useRef(new Animated.Value(1)).current;
+  // IMPORTANT: actual width of the card (used for paging)
+  const [cardWidth, setCardWidth] = useState(0);
 
-  useEffect(() => {
-    if (!visible) return;
-
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(scale, { toValue: 1.06, duration: 900, useNativeDriver: true }),
-        Animated.timing(scale, { toValue: 0.96, duration: 900, useNativeDriver: true }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [visible, scale]);
+  // "Beating" logo animation (scale up/down)
+  const beat = useRef(new Animated.Value(1)).current;
 
   const slides = useMemo(
     () => [
@@ -41,27 +53,43 @@ export default function OnboardingModal({ visible, onDone, appVersion }) {
         key: "welcome",
         title: "Welcome to What You Dink",
         body: "Quick tour — swipe or tap Next.",
-        showLogo: true,
+        logo: require("../../assets/images/icon.png"),
+        pulseLogo: true,
       },
       {
         key: "clinic",
         title: "Clinic",
-        body: "Find skills, training paths, and lessons fast.",
+        body: "Fine tune specific skills, follow our training paths, and explore our pickleball guides.",
+        image: require("../../assets/images/onboarding-clinic.jpg"),
+        imageHeight: 300,
       },
       {
         key: "map",
         title: "Map",
-        body: "Explore courts near you.",
+        body: "Explore courts and clubs near you that will fit your needs.",
+        image: require("../../assets/images/onboarding-map.jpg"),
+        imageHeight: 260,
       },
       {
-        key: "blog",
+        key: "articles",
         title: "Articles",
-        body: "Read and share posts — built to help discovery.",
+        body: "Read and share reviews on clubs i've personally visited and reviewed.",
+        image: require("../../assets/images/onboarding-articles.jpg"),
+        imageHeight: 260,
       },
       {
-        key: "done",
-        title: "You're all set",
-        body: "Tap Finish to start exploring.",
+        key: "social",
+        title: "Stay connected",
+        body: "Support us by subscribing to our YouTube and following us on social.",
+        socials: [
+          {
+            label: "Subscribe on YouTube",
+            url: "https://www.youtube.com/@WhatYouDink?sub_confirmation=1",
+            kind: "youtube",
+          },
+          { label: "Instagram", url: "https://www.instagram.com/whatyoudink", kind: "instagram" },
+          { label: "TikTok", url: "https://www.tiktok.com/@WhatYouDink", kind: "tiktok" },
+        ],
       },
     ],
     []
@@ -70,78 +98,189 @@ export default function OnboardingModal({ visible, onDone, appVersion }) {
   useEffect(() => {
     if (!visible) {
       setPage(0);
+      // scroll back to 0 using measured width (if available)
       scrollRef.current?.scrollTo?.({ x: 0, animated: false });
+      beat.stopAnimation();
+      beat.setValue(1);
+      return;
     }
-  }, [visible]);
+
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(beat, {
+          toValue: 1.08,
+          duration: 520,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(beat, {
+          toValue: 1.0,
+          duration: 520,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    loop.start();
+
+    return () => loop.stop();
+  }, [visible, beat]);
+
+  // If the card width changes (rotation / first layout), keep the current page aligned.
+  useEffect(() => {
+    if (!visible) return;
+    if (!cardWidth) return;
+    scrollRef.current?.scrollTo?.({ x: page * cardWidth, animated: false });
+  }, [cardWidth, page, visible]);
 
   function goTo(nextIndex) {
     const clamped = Math.max(0, Math.min(slides.length - 1, nextIndex));
     setPage(clamped);
-    scrollRef.current?.scrollTo?.({ x: clamped * width, animated: true });
+    if (!cardWidth) return;
+    scrollRef.current?.scrollTo?.({ x: clamped * cardWidth, animated: true });
   }
 
   const isLast = page === slides.length - 1;
 
+  async function openUrl(url) {
+    try {
+      await Linking.openURL(url);
+    } catch (e) {
+      console.warn("Failed to open url:", url, e);
+    }
+  }
+
+  const SocialButton = ({ kind, label, url }) => {
+    const meta = getSocialMeta(kind);
+    return (
+      <Pressable
+        onPress={() => openUrl(url)}
+        style={({ pressed }) => [
+          styles.socialBtn,
+          { backgroundColor: THEME.btnBg, borderColor: THEME.btnBorder },
+          pressed && { opacity: 0.88, transform: [{ scale: 0.99 }] },
+        ]}
+      >
+        <View style={styles.socialRow}>
+          {meta.icon}
+          <Text style={[styles.socialText, { color: THEME.btnText }]} numberOfLines={1}>
+            {label}
+          </Text>
+        </View>
+      </Pressable>
+    );
+  };
+
   return (
     <Modal visible={visible} animationType="fade" transparent>
-      <View style={styles.backdrop}>
-        <SafeAreaView style={styles.card}>
+      <View style={[styles.backdrop, { backgroundColor: THEME.backdrop }]}>
+        <SafeAreaView
+          style={[
+            styles.card,
+            { backgroundColor: THEME.cardBg, borderColor: THEME.cardBorder },
+          ]}
+          onLayout={(e) => {
+            const w = Math.round(e.nativeEvent.layout.width);
+            if (w && w !== cardWidth) setCardWidth(w);
+          }}
+        >
           <ScrollView
             ref={scrollRef}
             horizontal
             pagingEnabled
+            // Critical: page snaps to CARD width (not window width)
+            snapToInterval={cardWidth || 1}
+            decelerationRate="fast"
+            disableIntervalMomentum
             showsHorizontalScrollIndicator={false}
             onMomentumScrollEnd={(e) => {
-              const idx = Math.round(e.nativeEvent.contentOffset.x / width);
+              if (!cardWidth) return;
+              const idx = Math.round(e.nativeEvent.contentOffset.x / cardWidth);
               setPage(idx);
             }}
           >
             {slides.map((s) => (
-              <View key={s.key} style={[styles.slide, { width }]}>
-                {s.showLogo ? (
+              <View key={s.key} style={[styles.slide, { width: cardWidth || "100%" }]}>
+                {/* Slide 1: pulsing logo */}
+                {s.logo ? (
+                  <Animated.View
+                    style={[
+                      styles.logoWrap,
+                      s.pulseLogo && { transform: [{ scale: beat }] },
+                    ]}
+                  >
+                    <Image source={s.logo} style={styles.logo} resizeMode="contain" />
+                  </Animated.View>
+                ) : null}
+
+                {/* Generic per-slide image above text */}
+                {s.image ? (
                   <>
-                    <Animated.View style={{ transform: [{ scale }] }}>
+                    <View style={styles.heroFrame}>
                       <Image
-                        source={require("../../assets/images/whatyoudinklogo-outline.png")}
-                        style={styles.logo}
+                        source={s.image}
+                        style={[
+                          styles.heroImage,
+                          { height: s.imageHeight ?? styles.heroImage.height },
+                        ]}
                         resizeMode="contain"
                       />
-                    </Animated.View>
-                    <View style={{ height: 16 }} />
-                    <ActivityIndicator />
-                    <View style={{ height: 8 }} />
-                    <Text style={styles.version}>v{appVersion}</Text>
+                    </View>
+                    <View style={{ height: 14 }} />
                   </>
                 ) : null}
 
-                <View style={{ height: s.showLogo ? 22 : 0 }} />
+                <Text style={[styles.title, { color: THEME.title }]} numberOfLines={2}>
+                  {s.title}
+                </Text>
+                <Text style={[styles.body, { color: THEME.body }]}>{s.body}</Text>
 
-                <Text style={styles.title}>{s.title}</Text>
-                <Text style={styles.body}>{s.body}</Text>
+                {Array.isArray(s.socials) && s.socials.length ? (
+                  <View style={styles.linksWrap}>
+                    {s.socials.map((l) => (
+                      <SocialButton key={l.url} kind={l.kind} label={l.label} url={l.url} />
+                    ))}
+                  </View>
+                ) : null}
               </View>
             ))}
           </ScrollView>
 
           <View style={styles.dots}>
             {slides.map((_, i) => (
-              <View key={i} style={[styles.dot, i === page && styles.dotActive]} />
+              <View
+                key={i}
+                style={[
+                  styles.dot,
+                  { backgroundColor: i === page ? THEME.dotActive : THEME.dot },
+                ]}
+              />
             ))}
           </View>
 
           <View style={styles.actions}>
             <Pressable
               onPress={() => goTo(page - 1)}
-              style={[styles.btn, page === 0 && styles.btnDisabled]}
+              style={[
+                styles.btn,
+                { backgroundColor: THEME.btnBg, borderColor: THEME.btnBorder },
+                page === 0 && styles.btnDisabled,
+              ]}
               disabled={page === 0}
             >
-              <Text style={styles.btnText}>Back</Text>
+              <Text style={[styles.btnText, { color: THEME.btnText }]}>Back</Text>
             </Pressable>
 
             <Pressable
               onPress={() => (isLast ? onDone?.() : goTo(page + 1))}
-              style={[styles.btn, styles.btnPrimary]}
+              style={[
+                styles.btn,
+                { backgroundColor: THEME.btnPrimaryBg, borderColor: THEME.btnPrimaryBg },
+              ]}
             >
-              <Text style={[styles.btnText, styles.btnTextPrimary]}>{isLast ? "Finish" : "Next"}</Text>
+              <Text style={[styles.btnText, { color: THEME.btnPrimaryText }]}>
+                {isLast ? "Finish" : "Next"}
+              </Text>
             </Pressable>
           </View>
         </SafeAreaView>
@@ -150,18 +289,31 @@ export default function OnboardingModal({ visible, onDone, appVersion }) {
   );
 }
 
+function getSocialMeta(kind) {
+  switch (kind) {
+    case "youtube":
+      return { icon: <FontAwesome6 name="youtube" size={28} color="#FF0033" /> };
+    case "instagram":
+      return { icon: <FontAwesome6 name="instagram" size={28} color="#E1306C" /> };
+    case "tiktok":
+      return { icon: <FontAwesome6 name="tiktok" size={28} color="#25F4EE" /> };
+    default:
+      return { icon: <FontAwesome6 name="link" size={28} color="#FFFFFF" /> };
+  }
+}
+
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
     justifyContent: "center",
     alignItems: "center",
+    paddingVertical: 16,
   },
   card: {
     width: "92%",
-    borderRadius: 18,
+    borderRadius: 22,
     overflow: "hidden",
-    backgroundColor: "white",
+    borderWidth: StyleSheet.hairlineWidth,
   },
   slide: {
     paddingHorizontal: 22,
@@ -169,24 +321,101 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  logo: { width: 180, height: 180 },
-  title: { fontSize: 22, fontWeight: "700", textAlign: "center", marginTop: 10 },
-  body: { fontSize: 15, textAlign: "center", marginTop: 10, opacity: 0.8, paddingHorizontal: 12 },
-  version: { fontSize: 12, opacity: 0.55 },
-  dots: { flexDirection: "row", justifyContent: "center", paddingBottom: 6, paddingTop: 2 },
-  dot: { width: 8, height: 8, borderRadius: 999, backgroundColor: "#d7d7d7", marginHorizontal: 4 },
-  dotActive: { backgroundColor: "#111" },
-  actions: { flexDirection: "row", justifyContent: "space-between", padding: 14 },
-  btn: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    backgroundColor: "#efefef",
-    minWidth: 96,
+  logoWrap: {
+    width: "62%",
+    maxWidth: 240,
+    height: 120,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
+  },
+  logo: {
+    width: "100%",
+    height: "100%",
+  },
+
+  heroFrame: {
+    width: "100%",
     alignItems: "center",
   },
-  btnPrimary: { backgroundColor: "#111" },
-  btnDisabled: { opacity: 0.35 },
-  btnText: { fontSize: 15, fontWeight: "600" },
-  btnTextPrimary: { color: "white" },
+  heroImage: {
+    width: "88%",
+    maxWidth: 380,
+    height: 260,
+  },
+
+  title: {
+    fontSize: 22,
+    fontWeight: "800",
+    textAlign: "center",
+    letterSpacing: 0.2,
+  },
+  body: {
+    marginTop: 10,
+    fontSize: 15.5,
+    lineHeight: 21,
+    textAlign: "center",
+  },
+
+  linksWrap: {
+    marginTop: 18,
+    width: "100%",
+    gap: 12,
+    alignItems: "center",
+  },
+  socialBtn: {
+    width: "78%",
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  socialRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  socialText: {
+    fontSize: 16,
+    fontWeight: "900",
+    textAlign: "center",
+    flexShrink: 1,
+  },
+
+  dots: {
+    flexDirection: "row",
+    justifyContent: "center",
+    paddingVertical: 10,
+    gap: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(255,255,255,0.10)",
+  },
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: 999,
+  },
+  actions: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    padding: 14,
+    gap: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(255,255,255,0.10)",
+  },
+  btn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: "center",
+  },
+  btnDisabled: {
+    opacity: 0.4,
+  },
+  btnText: {
+    fontSize: 15,
+    fontWeight: "900",
+  },
 });
