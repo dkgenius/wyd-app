@@ -291,7 +291,8 @@ export default function BlogTab() {
   const Header = useMemo(() => {
     return (
       <View style={styles.headerWrap}>
-        <Text style={styles.h1}>Articles</Text>
+        <Text style={styles.h1}>Blog</Text>
+        <Text style={styles.sub}>Just sharing my experiences.</Text>
 
         <View style={styles.searchRow}>
           <TextInput

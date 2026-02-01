@@ -63,7 +63,7 @@ function fmtRating(r?: number | null) {
 function Logo() {
   return (
     <View style={styles.logoWrap}>
-      <Image source={require("../../assets/images/whatyoudinklogo-outline.png")} style={styles.logo} />
+      <Image source={require("../../assets/images/icon.png")} style={styles.logo} />
 
       <View style={styles.socials}>
         <Pressable

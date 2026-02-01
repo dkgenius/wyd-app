@@ -15,33 +15,12 @@ export default function BlogPostWebScreen() {
 
   const url = useMemo(() => {
     const safeSlug = typeof slug === "string" ? slug : "";
+    // app=1 lets your website optionally hide its header/footer when embedded in the app.
     return `https://whatyoudink.com/post.php?slug=${encodeURIComponent(safeSlug)}&app=1`;
   }, [slug]);
 
-  const injectedJS = useMemo(() => {
-    // Avoid a "blank bar" outside the WebView. Instead, add padding INSIDE the webpage so
-    // the article content doesn't sit under Android's nav/gesture area.
-    const bottom = Math.max(0, Math.floor(insets.bottom || 0));
-    const top = Math.max(0, Math.floor(insets.top || 0));
-    return `
-      (function() {
-        try {
-          var bottom = ${bottom};
-          // Ensure the page can scroll past the nav bar without showing a separate native-colored bar.
-          document.documentElement.style.paddingBottom = bottom + 'px';
-          document.body.style.paddingBottom = bottom + 'px';
-
-          // Some sites set backgrounds on html/body; keep them consistent.
-          // If your site uses a non-white background, you can change this color later.
-          document.documentElement.style.backgroundColor = 'transparent';
-          document.body.style.backgroundColor = 'transparent';
-        } catch (e) {}
-      })();
-      true;
-    `;
-  }, [insets.bottom, insets.top]);
-
   const handleBack = () => {
+    // Prefer navigating back within the web page (if user clicked links inside the webview).
     if (canGoBack && webRef.current) {
       webRef.current.goBack();
       return;
@@ -58,8 +37,8 @@ export default function BlogPostWebScreen() {
   };
 
   return (
-    // Only handle TOP safe area here; bottom padding is handled inside the WebView via injected JS
-    <SafeAreaView style={styles.safe} edges={["top"]}>
+    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+      {/* App top bar so the user can always get back into the app */}
       <View style={[styles.topBar, { paddingTop: insets.top, height: 48 + insets.top }]}>
         <Pressable onPress={handleBack} style={styles.iconBtn} hitSlop={10}>
           <Ionicons name="chevron-back" size={24} color="#fff" />
@@ -74,14 +53,16 @@ export default function BlogPostWebScreen() {
         </Pressable>
       </View>
 
-      <WebView
-        ref={webRef}
-        source={{ uri: url }}
-        style={styles.web}
-        onNavigationStateChange={(navState) => setCanGoBack(!!navState.canGoBack)}
-        injectedJavaScript={injectedJS}
-        allowsBackForwardNavigationGestures={Platform.OS === "ios"}
-      />
+      {/* Keep content clear of Android nav bar / gesture area */}
+      <View style={[styles.content, { paddingBottom: Platform.OS === "android" ? insets.bottom : 0 }]}>
+        <WebView
+          ref={webRef}
+          source={{ uri: url }}
+          style={styles.web}
+          onNavigationStateChange={(navState) => setCanGoBack(!!navState.canGoBack)}
+          allowsBackForwardNavigationGestures={Platform.OS === "ios"}
+        />
+      </View>
     </SafeAreaView>
   );
 }
@@ -110,7 +91,8 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: "center",
     marginHorizontal: 8,
-    paddingBottom: 10,
+    paddingBottom: 10, // aligns title vertically with icons
   },
-  web: { flex: 1, backgroundColor: "transparent" },
+  content: { flex: 1, backgroundColor: "#fff" },
+  web: { flex: 1, backgroundColor: "#fff" },
 });

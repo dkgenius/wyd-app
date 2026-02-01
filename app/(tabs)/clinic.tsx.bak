@@ -15,7 +15,6 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { WebView } from "react-native-webview";
 import { apiUrl } from "../../src/api/base";
 
 type Topic = {
@@ -204,10 +203,6 @@ export default function ClinicTab() {
 
   const abortRef = useRef<AbortController | null>(null);
 
-  // Used when rendering a Clinic lesson as an in-app WebView (SEO-canonical website page).
-  const webViewRef = useRef<WebView>(null);
-  const [webViewHeight, setWebViewHeight] = useState(600);
-
   const start = useCallback(async <T,>(fn: (signal: AbortSignal) => Promise<T>) => {
     abortRef.current?.abort();
     const ac = new AbortController();
@@ -325,8 +320,6 @@ export default function ClinicTab() {
         await loadPath(view.slug);
       } else if (view.name === "item") {
         await loadItem(view.slug);
-        // If the lesson is being displayed via WebView, also reload the page.
-        webViewRef.current?.reload();
       }
     } finally {
       setRefreshing(false);
@@ -748,24 +741,6 @@ export default function ClinicTab() {
 
   if (view.name === "item") {
     const item = itemDetail[view.slug];
-    const websiteItemUrl = `https://whatyoudink.com/clinic/item.php?slug=${encodeURIComponent(view.slug)}&app=1`;
-
-    const WEBVIEW_HEIGHT_JS = `
-      (function () {
-        function postHeight() {
-          var height = Math.max(
-            document.body ? document.body.scrollHeight : 0,
-            document.documentElement ? document.documentElement.scrollHeight : 0
-          );
-          window.ReactNativeWebView && window.ReactNativeWebView.postMessage(String(height));
-        }
-        setTimeout(postHeight, 50);
-        setTimeout(postHeight, 250);
-        setTimeout(postHeight, 750);
-        window.addEventListener('load', postHeight);
-      })();
-      true;
-    `;
 
     return (
       <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
@@ -781,32 +756,6 @@ export default function ClinicTab() {
                   <Text style={styles.primaryBtnText}>Retry</Text>
                 </Pressable>
               ) : null}
-            </View>
-          ) : compact(item.content_html) ? (
-            <View style={{ flex: 1 }}>
-              <WebView
-                ref={webViewRef}
-                source={{ uri: websiteItemUrl }}
-                originWhitelist={["*"]}
-                injectedJavaScript={WEBVIEW_HEIGHT_JS}
-                onMessage={(e) => {
-                  const h = parseInt(String(e.nativeEvent.data || ""), 10);
-                  if (!Number.isFinite(h)) return;
-                  if (h < 200) return;
-                  // Prevent runaway sizes if a page misbehaves.
-                  setWebViewHeight(Math.min(h, 20000));
-                }}
-                // Let the native ScrollView handle scroll + pull-to-refresh.
-                scrollEnabled={false}
-                style={{ width: "100%", height: webViewHeight, backgroundColor: "transparent" }}
-                startInLoadingState
-                renderLoading={() => (
-                  <View style={styles.box}>
-                    <ActivityIndicator color={stylesVars.text} />
-                    <Text style={styles.muted}>Loading…</Text>
-                  </View>
-                )}
-              />
             </View>
           ) : (
             <View style={{ gap: 12 }}>
@@ -824,6 +773,14 @@ export default function ClinicTab() {
                   <Ionicons name="logo-youtube" size={18} color={stylesVars.accentInk} />
                   <Text style={[styles.primaryBtnText, { marginLeft: 8 }]}>Watch on YouTube</Text>
                 </Pressable>
+              ) : null}
+
+              {compact(item.content_html) ? (
+                <View style={styles.htmlBox}>
+                  <Text style={styles.htmlHint}>
+                    This lesson has written content. If you want, we can render it in-app with a WebView later.
+                  </Text>
+                </View>
               ) : null}
             </View>
           )}

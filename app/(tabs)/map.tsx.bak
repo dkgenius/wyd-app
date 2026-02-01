@@ -1709,13 +1709,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "rgba(255,255,255,0.06)",
   },
-  hoursRowTodayOpen: { backgroundColor: "rgba(199, 255, 46, 0.14)", borderRadius: 10, paddingHorizontal: 10 },
+  hoursRowTodayOpen: { backgroundColor: "rgba(52, 211, 153, 0.12)", borderRadius: 10, paddingHorizontal: 10 },
 hoursRowTodayClosed: { backgroundColor: "rgba(255, 84, 84, 0.10)", borderRadius: 10, paddingHorizontal: 10 },
   hoursDay: { color: "rgba(255,255,255,0.80)", fontWeight: "900" },
-  hoursDayTodayOpen: { color: "#C7FF2E" },
+  hoursDayTodayOpen: { color: "rgba(16, 185, 129, 0.98)" },
 hoursDayTodayClosed: { color: "rgba(255, 150, 150, 0.95)" },
   hoursTime: { color: "rgba(255,255,255,0.70)", fontWeight: "650" },
-  hoursTimeTodayOpen: { color: "#C7FF2E", fontWeight: "900" },
+  hoursTimeTodayOpen: { color: "rgba(16, 185, 129, 0.98)", fontWeight: "900" },
 hoursTimeTodayClosed: { color: "rgba(255, 150, 150, 0.95)", fontWeight: "900" },
 
   subRatingRow: {

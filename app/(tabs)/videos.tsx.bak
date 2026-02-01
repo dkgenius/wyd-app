@@ -35,7 +35,7 @@ export default function VideosTab() {
         <Text style={styles.h1}>Videos</Text>
 
         <View style={styles.logoWrap}>
-          <Image source={require("../../assets/images/whatyoudinklogo-outline.png")} style={styles.logo} resizeMode="contain" />
+          <Image source={require("../../assets/images/icon.png")} style={styles.logo} resizeMode="contain" />
         </View>
 
         <View style={styles.card}>
