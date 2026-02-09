@@ -2,6 +2,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Share,
   Alert,
   FlatList,
   Image,
@@ -14,6 +15,7 @@ import {
 } from "react-native";
 import * as Location from "expo-location";
 import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const API_BASE = "https://whatyoudink.com";
@@ -264,6 +266,20 @@ export default function BlogTab() {
         onPress={() => router.push({ pathname: "/blog/[slug]", params: { slug: item.slug } })}
         style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
       >
+        <Pressable
+          onPress={(e) => {
+            // Prevent opening the article when tapping Share
+            // @ts-ignore
+            e?.stopPropagation?.();
+            const url = `${API_BASE}/blog/${item.slug}`;
+            Share.share({ title: item.title, message: `${item.title}\n\n${url}`, url }).catch(() => {});
+          }}
+          style={styles.shareBtn}
+          hitSlop={10}
+        >
+          <Ionicons name="share-outline" size={18} color="#fff" />
+        </Pressable>
+
         {!!item.featured_image_url && (
           <View style={styles.thumb}>
             <Image source={{ uri: item.featured_image_url }} style={styles.thumbImg} resizeMode="cover" />
@@ -463,6 +479,8 @@ const styles = StyleSheet.create({
   radiusTextOn: { color: "rgba(255,255,255,0.92)" },
 
   card: {
+    position: "relative",
+
     borderRadius: 18,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
@@ -471,6 +489,21 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   cardPressed: { transform: [{ translateY: -1 }], backgroundColor: "rgba(255,255,255,0.06)", borderColor: "rgba(255,255,255,0.16)" },
+
+  shareBtn: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.35)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.18)",
+    zIndex: 5,
+  },
 
   thumb: {
     width: "100%",

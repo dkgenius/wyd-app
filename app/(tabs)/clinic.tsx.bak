@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { WebView } from "react-native-webview";
 import { apiUrl } from "../../src/api/base";
 
 type Topic = {
@@ -49,11 +50,20 @@ type Item = {
   content_html?: string | null;
 };
 
+type Quiz = {
+  id: number;
+  title: string;
+  slug: string;
+  description?: string | null;
+};
+
 type PathStep = {
   step_no: number;
   step_title: string;
   note?: string | null;
-  item: Item;
+  step_type?: "item" | "quiz"; // default: item
+  item?: Item;                // present when step_type=item
+  quiz?: Quiz;                // present when step_type=quiz
 };
 
 type ViewState =
@@ -62,7 +72,8 @@ type ViewState =
   | { name: "topic"; slug: string; title?: string }
   | { name: "paths" }
   | { name: "path"; slug: string; title?: string }
-  | { name: "item"; slug: string; title?: string }
+  | { name: "item"; slug: string; title?: string; pathSlug?: string; step?: number }
+  | { name: "quiz"; slug: string; title?: string; pathSlug?: string; step?: number }
   | { name: "filters"; slug: string; title?: string };
 
 const TYPE_LABEL: Record<string, string> = {
@@ -203,6 +214,10 @@ export default function ClinicTab() {
 
   const abortRef = useRef<AbortController | null>(null);
 
+  // Used when rendering a Clinic lesson as an in-app WebView (SEO-canonical website page).
+  const webViewRef = useRef<WebView>(null);
+  const [webViewHeight, setWebViewHeight] = useState(600);
+
   const start = useCallback(async <T,>(fn: (signal: AbortSignal) => Promise<T>) => {
     abortRef.current?.abort();
     const ac = new AbortController();
@@ -320,6 +335,11 @@ export default function ClinicTab() {
         await loadPath(view.slug);
       } else if (view.name === "item") {
         await loadItem(view.slug);
+        // If the lesson is being displayed via WebView, also reload the page.
+        webViewRef.current?.reload();
+      } else if (view.name === "quiz") {
+        // Quiz is rendered via WebView only.
+        webViewRef.current?.reload();
       }
     } finally {
       setRefreshing(false);
@@ -339,6 +359,8 @@ export default function ClinicTab() {
       ? view.title ?? "Topic"
       : view.name === "path"
       ? view.title ?? "Path"
+      : view.name === "quiz"
+      ? view.title ?? "Quiz"
       : view.title ?? "Lesson";
 
   const header = (
@@ -725,22 +747,181 @@ export default function ClinicTab() {
               ) : null}
             </View>
           }
-          renderItem={({ item }) => (
-            <Row
-              title={`${item.step_no}. ${item.step_title}`}
-              subtitle={compact(item.note) ?? compact(item.item.excerpt)}
-              meta={pillText(item.item)}
-              imageUrl={compact(item.item.featured_image_url)}
-              onPress={() => push({ name: "item", slug: item.item.slug, title: item.step_title })}
-            />
-          )}
+          renderItem={({ item }) => {
+            const isQuiz = item.step_type === "quiz" || (!!item.quiz && !item.item);
+            const title = `${item.step_no}. ${item.step_title}`;
+            const subtitle = compact(item.note) ?? compact(isQuiz ? item.quiz?.description : item.item?.excerpt);
+            const meta = isQuiz ? "QUIZ" : pillText(item.item as Item);
+            const imageUrl = compact(isQuiz ? null : item.item?.featured_image_url);
+
+            return (
+              <Row
+                title={title}
+                subtitle={subtitle}
+                meta={meta}
+                imageUrl={imageUrl}
+                onPress={() => {
+                  if (isQuiz && item.quiz) {
+                    push({ name: "quiz", slug: item.quiz.slug, title: item.step_title, pathSlug: view.slug, step: item.step_no });
+                  } else if (item.item) {
+                    push({ name: "item", slug: item.item.slug, title: item.step_title, pathSlug: view.slug, step: item.step_no });
+                  }
+                }}
+              />
+            );
+          }}
         />
       </SafeAreaView>
     );
   }
 
-  if (view.name === "item") {
+  
+  if (view.name === "quiz") {
+    const websiteQuizUrl =
+      `https://whatyoudink.com/clinic/quiz.php?slug=${encodeURIComponent(view.slug)}&app=1` +
+      (view.pathSlug ? `&path=${encodeURIComponent(view.pathSlug)}&step=${encodeURIComponent(String(view.step ?? ""))}` : "");
+
+    const WEBVIEW_JS = `
+      (function () {
+        try {
+          // Hide website chrome inside the app webview (best-effort).
+          var css = [
+            'header','footer','#header','#site-header','.site-header','.header',
+            '.topbar','.top-bar','.navbar','.nav','.navigation',
+            '#footer','.site-footer','.footer'
+          ].join(',') + '{ display:none !important; }';
+          var style = document.createElement('style');
+          style.innerHTML = css;
+          document.head && document.head.appendChild(style);
+        } catch(e) {}
+
+        function hardTop() {
+          try { window.scrollTo(0,0); } catch(e) {}
+          try { document.documentElement.scrollTop = 0; } catch(e) {}
+          try { document.body.scrollTop = 0; } catch(e) {}
+        }
+
+        function postHeight() {
+          var height = Math.max(
+            document.body ? document.body.scrollHeight : 0,
+            document.documentElement ? document.documentElement.scrollHeight : 0
+          );
+          window.ReactNativeWebView && window.ReactNativeWebView.postMessage(String(height));
+        }
+
+        hardTop();
+        setTimeout(function(){ hardTop(); postHeight(); }, 50);
+        setTimeout(function(){ hardTop(); postHeight(); }, 250);
+        setTimeout(function(){ postHeight(); }, 750);
+        window.addEventListener('load', function(){ hardTop(); postHeight(); });
+      })();
+      true;
+    `;
+
+    const interceptClinicNav = (url: string) => {
+      try {
+        // Normalize for matching
+        const u = String(url || "");
+        if (!u) return true;
+
+        // If the user taps out to external sites, allow it.
+        if (!u.includes("whatyoudink.com")) return true;
+
+        // Route clinic web pages back into native screens.
+        if (u.includes("/clinic/paths.php")) {
+          setView({ name: "paths" });
+          return false;
+        }
+
+        if (u.includes("/clinic/path.php")) {
+          const m = u.match(/[?&]slug=([^&#]+)/);
+          const slug = m ? decodeURIComponent(m[1]) : "";
+          if (slug) setView({ name: "path", slug });
+          return false;
+        }
+
+        if (u.includes("/clinic/item.php")) {
+          const m = u.match(/[?&]slug=([^&#]+)/);
+          const slug = m ? decodeURIComponent(m[1]) : "";
+          const mp = u.match(/[?&]path=([^&#]+)/);
+          const ms = u.match(/[?&]step=([^&#]+)/);
+          if (slug) setView({ name: "item", slug, pathSlug: mp ? decodeURIComponent(mp[1]) : undefined, step: ms ? parseInt(decodeURIComponent(ms[1]), 10) : undefined });
+          return false;
+        }
+
+        if (u.includes("/clinic/quiz.php")) {
+          // Stay on quiz; just hard-top the current one.
+          return true;
+        }
+
+        return true;
+      } catch {
+        return true;
+      }
+    };
+
+    return (
+      <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
+        {header}
+
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={stylesVars.text} />}
+        >
+          <View style={{ flex: 1 }}>
+            <WebView
+              ref={webViewRef}
+              source={{ uri: websiteQuizUrl }}
+              originWhitelist={["*"]}
+              injectedJavaScript={WEBVIEW_JS}
+              onShouldStartLoadWithRequest={(req) => interceptClinicNav(req.url)}
+              onMessage={(e) => {
+                const h = parseInt(String(e.nativeEvent.data || ""), 10);
+                if (!Number.isFinite(h)) return;
+                if (h < 200) return;
+                setWebViewHeight(Math.min(h, 20000));
+              }}
+              scrollEnabled={false}
+              style={{ width: "100%", height: webViewHeight, backgroundColor: "transparent" }}
+              startInLoadingState
+              renderLoading={() => (
+                <View style={styles.box}>
+                  <ActivityIndicator color={stylesVars.text} />
+                  <Text style={styles.muted}>Loading…</Text>
+                </View>
+              )}
+            />
+          </View>
+
+          <View style={{ height: insets.bottom + 24 }} />
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+if (view.name === "item") {
     const item = itemDetail[view.slug];
+    const websiteItemUrl =
+      `https://whatyoudink.com/clinic/item.php?slug=${encodeURIComponent(view.slug)}&app=1` +
+      (view.pathSlug ? `&path=${encodeURIComponent(view.pathSlug)}&step=${encodeURIComponent(String(view.step ?? ""))}` : "");
+
+    const WEBVIEW_JS = `
+      (function () {
+        function postHeight() {
+          var height = Math.max(
+            document.body ? document.body.scrollHeight : 0,
+            document.documentElement ? document.documentElement.scrollHeight : 0
+          );
+          window.ReactNativeWebView && window.ReactNativeWebView.postMessage(String(height));
+        }
+        hardTop();
+        setTimeout(function(){ hardTop(); postHeight(); }, 50);
+        setTimeout(function(){ hardTop(); postHeight(); }, 250);
+        setTimeout(function(){ postHeight(); }, 750);
+        window.addEventListener('load', function(){ hardTop(); postHeight(); });
+      })();
+      true;
+    `;
 
     return (
       <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
@@ -756,6 +937,62 @@ export default function ClinicTab() {
                   <Text style={styles.primaryBtnText}>Retry</Text>
                 </Pressable>
               ) : null}
+            </View>
+          ) : compact(item.content_html) ? (
+            <View style={{ flex: 1 }}>
+              <WebView
+                ref={webViewRef}
+                source={{ uri: websiteItemUrl }}
+                originWhitelist={["*"]}
+                injectedJavaScript={WEBVIEW_JS}
+                onShouldStartLoadWithRequest={(req) => {
+                  try {
+                    const u = String(req.url || "");
+                    if (!u) return true;
+                    if (!u.includes("whatyoudink.com")) return true;
+
+                    if (u.includes("/clinic/paths.php")) {
+                      setView({ name: "paths" });
+                      return false;
+                    }
+                    if (u.includes("/clinic/path.php")) {
+                      const m = u.match(/[?&]slug=([^&#]+)/);
+                      const slug = m ? decodeURIComponent(m[1]) : "";
+                      if (slug) setView({ name: "path", slug });
+                      return false;
+                    }
+                    if (u.includes("/clinic/quiz.php")) {
+                      const m = u.match(/[?&]slug=([^&#]+)/);
+                      const slug = m ? decodeURIComponent(m[1]) : "";
+                      const mp = u.match(/[?&]path=([^&#]+)/);
+                      const ms = u.match(/[?&]step=([^&#]+)/);
+                      if (slug) setView({ name: "quiz", slug, pathSlug: mp ? decodeURIComponent(mp[1]) : undefined, step: ms ? parseInt(decodeURIComponent(ms[1]), 10) : undefined });
+                      return false;
+                    }
+                    // Let normal item-page internal anchors load.
+                    return true;
+                  } catch {
+                    return true;
+                  }
+                }}
+                onMessage={(e) => {
+                  const h = parseInt(String(e.nativeEvent.data || ""), 10);
+                  if (!Number.isFinite(h)) return;
+                  if (h < 200) return;
+                  // Prevent runaway sizes if a page misbehaves.
+                  setWebViewHeight(Math.min(h, 20000));
+                }}
+                // Let the native ScrollView handle scroll + pull-to-refresh.
+                scrollEnabled={false}
+                style={{ width: "100%", height: webViewHeight, backgroundColor: "transparent" }}
+                startInLoadingState
+                renderLoading={() => (
+                  <View style={styles.box}>
+                    <ActivityIndicator color={stylesVars.text} />
+                    <Text style={styles.muted}>Loading…</Text>
+                  </View>
+                )}
+              />
             </View>
           ) : (
             <View style={{ gap: 12 }}>
@@ -773,14 +1010,6 @@ export default function ClinicTab() {
                   <Ionicons name="logo-youtube" size={18} color={stylesVars.accentInk} />
                   <Text style={[styles.primaryBtnText, { marginLeft: 8 }]}>Watch on YouTube</Text>
                 </Pressable>
-              ) : null}
-
-              {compact(item.content_html) ? (
-                <View style={styles.htmlBox}>
-                  <Text style={styles.htmlHint}>
-                    This lesson has written content. If you want, we can render it in-app with a WebView later.
-                  </Text>
-                </View>
               ) : null}
             </View>
           )}

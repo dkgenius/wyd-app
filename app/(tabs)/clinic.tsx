@@ -50,11 +50,20 @@ type Item = {
   content_html?: string | null;
 };
 
+type Quiz = {
+  id: number;
+  title: string;
+  slug: string;
+  description?: string | null;
+};
+
 type PathStep = {
   step_no: number;
   step_title: string;
   note?: string | null;
-  item: Item;
+  step_type?: "item" | "quiz"; // default: item
+  item?: Item; // present when step_type=item
+  quiz?: Quiz; // present when step_type=quiz
 };
 
 type ViewState =
@@ -63,7 +72,8 @@ type ViewState =
   | { name: "topic"; slug: string; title?: string }
   | { name: "paths" }
   | { name: "path"; slug: string; title?: string }
-  | { name: "item"; slug: string; title?: string }
+  | { name: "item"; slug: string; title?: string; pathSlug?: string; step?: number }
+  | { name: "quiz"; slug: string; title?: string; pathSlug?: string; step?: number }
   | { name: "filters"; slug: string; title?: string };
 
 const TYPE_LABEL: Record<string, string> = {
@@ -178,6 +188,104 @@ const stylesVars = {
   accentInk: "#0b0f1a",
 };
 
+/**
+ * A robust WebView JS bridge that:
+ * - hides common website chrome (best-effort),
+ * - forces scroll to top,
+ * - posts height updates on load, resize, image load, and DOM mutations.
+ */
+function makeInjectedJS() {
+  return `
+  (function () {
+    try {
+      var css = [
+        'header','footer','#header','#site-header','.site-header','.header',
+        '.topbar','.top-bar','.navbar','.nav','.navigation',
+        '#footer','.site-footer','.footer'
+      ].join(',') + '{ display:none !important; }';
+      var style = document.createElement('style');
+      style.innerHTML = css;
+      document.head && document.head.appendChild(style);
+    } catch(e) {}
+
+    function hardTop(){
+      try { window.scrollTo(0,0); } catch(e) {}
+      try { document.documentElement.scrollTop = 0; } catch(e) {}
+      try { document.body.scrollTop = 0; } catch(e) {}
+    }
+
+    function postHeight(){
+      try{
+        var body = document.body;
+        var html = document.documentElement;
+        var h = Math.max(
+          body ? body.scrollHeight : 0,
+          html ? html.scrollHeight : 0,
+          body ? body.offsetHeight : 0,
+          html ? html.offsetHeight : 0
+        );
+        window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify({ type:'HEIGHT', height: h }));
+      }catch(e){}
+    }
+
+    function bindImages(){
+      try{
+        var imgs = document.images || [];
+        for (var i=0; i<imgs.length; i++){
+          var img = imgs[i];
+          if (img.__hBound) continue;
+          img.__hBound = true;
+          if (!img.complete){
+            img.addEventListener('load', function(){ setTimeout(postHeight, 50); }, { once:true });
+            img.addEventListener('error', function(){ setTimeout(postHeight, 50); }, { once:true });
+          }
+        }
+      }catch(e){}
+    }
+
+    // Kickoff
+    hardTop();
+    postHeight();
+    bindImages();
+
+    document.addEventListener('DOMContentLoaded', function(){
+      hardTop();
+      bindImages();
+      setTimeout(postHeight, 50);
+    });
+
+    window.addEventListener('load', function(){
+      hardTop();
+      bindImages();
+      setTimeout(postHeight, 50);
+      setTimeout(postHeight, 250);
+    });
+
+    window.addEventListener('resize', function(){
+      setTimeout(postHeight, 50);
+    });
+
+    // Observe DOM changes (e.g., lightbox open/close, lazy content)
+    try{
+      var mo = new MutationObserver(function(){
+        bindImages();
+        setTimeout(postHeight, 50);
+      });
+      mo.observe(document.documentElement, { childList:true, subtree:true, attributes:true });
+    }catch(e){}
+
+    // Short polling window helps slow networks / late layout shifts
+    var tries = 0;
+    var t = setInterval(function(){
+      tries++;
+      postHeight();
+      if (tries > 20) clearInterval(t);
+    }, 250);
+  })();
+  true;
+  `;
+}
+
 export default function ClinicTab() {
   const insets = useSafeAreaInsets();
 
@@ -187,6 +295,11 @@ export default function ClinicTab() {
   const push = useCallback((v: ViewState) => setStack((s) => [...s, v]), []);
   const pop = useCallback(() => setStack((s) => (s.length > 1 ? s.slice(0, -1) : s)), []);
   const goHome = useCallback(() => setStack([{ name: "home" }]), []);
+
+  // Replace current view (useful for intercepting web navigation)
+  const replaceView = useCallback((v: ViewState) => {
+    setStack((s) => (s.length ? [...s.slice(0, -1), v] : [v]));
+  }, []);
 
   const [topics, setTopics] = useState<Topic[] | null>(null);
   const [paths, setPaths] = useState<Path[] | null>(null);
@@ -204,9 +317,9 @@ export default function ClinicTab() {
 
   const abortRef = useRef<AbortController | null>(null);
 
-  // Used when rendering a Clinic lesson as an in-app WebView (SEO-canonical website page).
+  // WebView for lesson/quiz pages (we keep it non-scroll and size it to content)
   const webViewRef = useRef<WebView>(null);
-  const [webViewHeight, setWebViewHeight] = useState(600);
+  const [webViewHeight, setWebViewHeight] = useState(800);
 
   const start = useCallback(async <T,>(fn: (signal: AbortSignal) => Promise<T>) => {
     abortRef.current?.abort();
@@ -308,7 +421,6 @@ export default function ClinicTab() {
     })();
   }, [view, topics, paths, topicItems, pathSteps, itemDetail, loadTopics, loadPaths, loadTopic, loadPath, loadItem]);
 
-
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -325,7 +437,8 @@ export default function ClinicTab() {
         await loadPath(view.slug);
       } else if (view.name === "item") {
         await loadItem(view.slug);
-        // If the lesson is being displayed via WebView, also reload the page.
+        webViewRef.current?.reload();
+      } else if (view.name === "quiz") {
         webViewRef.current?.reload();
       }
     } finally {
@@ -333,21 +446,7 @@ export default function ClinicTab() {
     }
   }, [view, loadTopics, loadPaths, loadTopic, loadPath, loadItem]);
 
-  const headerTitle =
-    view.name === "home"
-      ? "Clinic"
-      : view.name === "topics"
-      ? "Topics"
-      : view.name === "paths"
-      ? "Training Paths"
-      : view.name === "filters"
-      ? "Filters"
-      : view.name === "topic"
-      ? view.title ?? "Topic"
-      : view.name === "path"
-      ? view.title ?? "Path"
-      : view.title ?? "Lesson";
-
+  // Header: user wants only Back + Home (no title) on deeper screens.
   const header = (
     <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
       {stack.length > 1 ? (
@@ -357,7 +456,7 @@ export default function ClinicTab() {
             <Text style={styles.headerBtnText}>Back</Text>
           </Pressable>
 
-          <Text style={[styles.h1, { flex: 1, textAlign: "left", marginLeft: 6 }]}>{headerTitle}</Text>
+          <View style={{ flex: 1 }} />
 
           <Pressable onPress={goHome} style={({ pressed }) => [styles.headerIconBtn, pressed && styles.btnPressed]}>
             <Ionicons name="home-outline" size={18} color={stylesVars.text} />
@@ -365,12 +464,69 @@ export default function ClinicTab() {
         </View>
       ) : (
         <View style={styles.headerRow}>
-          <Text style={[styles.h1, { flex: 1, textAlign: "left" }]}>{headerTitle}</Text>
+          <Text style={[styles.h1, { flex: 1, textAlign: "left" }]}>Clinic</Text>
         </View>
       )}
-
     </View>
   );
+
+  // Shared: intercept navigation inside web pages and route to native screens.
+  const interceptClinicNav = useCallback(
+    (url: string) => {
+      try {
+        const u = String(url || "");
+        if (!u) return true;
+        // external links -> allow
+        if (!u.includes("whatyoudink.com")) return true;
+
+        if (u.includes("/clinic/paths.php")) {
+          replaceView({ name: "paths" });
+          return false;
+        }
+        if (u.includes("/clinic/path.php")) {
+          const m = u.match(/[?&]slug=([^&#]+)/);
+          const slug = m ? decodeURIComponent(m[1]) : "";
+          if (slug) replaceView({ name: "path", slug });
+          return false;
+        }
+        if (u.includes("/clinic/item.php")) {
+          const m = u.match(/[?&]slug=([^&#]+)/);
+          const slug = m ? decodeURIComponent(m[1]) : "";
+          const mp = u.match(/[?&]path=([^&#]+)/);
+          const ms = u.match(/[?&]step=([^&#]+)/);
+          if (slug)
+            replaceView({
+              name: "item",
+              slug,
+              pathSlug: mp ? decodeURIComponent(mp[1]) : undefined,
+              step: ms ? parseInt(decodeURIComponent(ms[1]), 10) : undefined,
+            });
+          return false;
+        }
+        if (u.includes("/clinic/quiz.php")) {
+          const m = u.match(/[?&]slug=([^&#]+)/);
+          const slug = m ? decodeURIComponent(m[1]) : "";
+          const mp = u.match(/[?&]path=([^&#]+)/);
+          const ms = u.match(/[?&]step=([^&#]+)/);
+          if (slug)
+            replaceView({
+              name: "quiz",
+              slug,
+              pathSlug: mp ? decodeURIComponent(mp[1]) : undefined,
+              step: ms ? parseInt(decodeURIComponent(ms[1]), 10) : undefined,
+            });
+          return false;
+        }
+
+        return true;
+      } catch {
+        return true;
+      }
+    },
+    [replaceView]
+  );
+
+  const injectedJS = makeInjectedJS();
 
   if (view.name === "home") {
     const topTopics = (topics ?? []).slice(0, 6);
@@ -567,7 +723,6 @@ export default function ClinicTab() {
     );
   }
 
-
   if (view.name === "filters") {
     const slug = view.slug;
 
@@ -648,14 +803,12 @@ export default function ClinicTab() {
     );
   }
 
-
   if (view.name === "topic") {
     const items = topicItems[view.slug];
 
     return (
       <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
         {header}
-
 
         <View style={styles.filters}>
           <TextInput
@@ -732,40 +885,87 @@ export default function ClinicTab() {
               ) : null}
             </View>
           }
-          renderItem={({ item }) => (
-            <Row
-              title={`${item.step_no}. ${item.step_title}`}
-              subtitle={compact(item.note) ?? compact(item.item.excerpt)}
-              meta={pillText(item.item)}
-              imageUrl={compact(item.item.featured_image_url)}
-              onPress={() => push({ name: "item", slug: item.item.slug, title: item.step_title })}
-            />
-          )}
+          renderItem={({ item }) => {
+            const isQuiz = item.step_type === "quiz" || (!!item.quiz && !item.item);
+            const title = `${item.step_no}. ${item.step_title}`;
+            const subtitle = compact(item.note) ?? compact(isQuiz ? item.quiz?.description : item.item?.excerpt);
+            const meta = isQuiz ? "QUIZ" : pillText(item.item as Item);
+            const imageUrl = compact(isQuiz ? null : item.item?.featured_image_url);
+
+            return (
+              <Row
+                title={title}
+                subtitle={subtitle}
+                meta={meta}
+                imageUrl={imageUrl}
+                onPress={() => {
+                  if (isQuiz && item.quiz) {
+                    push({ name: "quiz", slug: item.quiz.slug, title: item.step_title, pathSlug: view.slug, step: item.step_no });
+                  } else if (item.item) {
+                    push({ name: "item", slug: item.item.slug, title: item.step_title, pathSlug: view.slug, step: item.step_no });
+                  }
+                }}
+              />
+            );
+          }}
         />
+      </SafeAreaView>
+    );
+  }
+
+  if (view.name === "quiz") {
+    const websiteQuizUrl =
+      `https://whatyoudink.com/clinic/quiz.php?slug=${encodeURIComponent(view.slug)}&app=1` +
+      (view.pathSlug ? `&path=${encodeURIComponent(view.pathSlug)}&step=${encodeURIComponent(String(view.step ?? ""))}` : "");
+
+    return (
+      <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
+        {header}
+
+        <ScrollView contentContainerStyle={styles.scroll} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={stylesVars.text} />}>
+          <View style={{ flex: 1 }}>
+            <WebView
+              ref={webViewRef}
+              source={{ uri: websiteQuizUrl }}
+              originWhitelist={["*"]}
+              injectedJavaScript={injectedJS}
+              onShouldStartLoadWithRequest={(req) => interceptClinicNav(req.url)}
+              onMessage={(e) => {
+                try {
+                  const msg = JSON.parse(String(e.nativeEvent.data || "{}"));
+                  if (msg?.type === "HEIGHT" && typeof msg.height === "number") {
+                    const h = Math.max(300, Math.min(msg.height, 50000));
+                    setWebViewHeight(h);
+                  }
+                } catch {
+                  // backwards compat if older web pages send plain number
+                  const h = parseInt(String(e.nativeEvent.data || ""), 10);
+                  if (Number.isFinite(h) && h > 200) setWebViewHeight(Math.min(h, 50000));
+                }
+              }}
+              scrollEnabled={false}
+              style={{ width: "100%", height: webViewHeight, backgroundColor: "transparent" }}
+              startInLoadingState
+              renderLoading={() => (
+                <View style={styles.box}>
+                  <ActivityIndicator color={stylesVars.text} />
+                  <Text style={styles.muted}>Loading…</Text>
+                </View>
+              )}
+            />
+          </View>
+
+          <View style={{ height: insets.bottom + 24 }} />
+        </ScrollView>
       </SafeAreaView>
     );
   }
 
   if (view.name === "item") {
     const item = itemDetail[view.slug];
-    const websiteItemUrl = `https://whatyoudink.com/clinic/item.php?slug=${encodeURIComponent(view.slug)}&app=1`;
-
-    const WEBVIEW_HEIGHT_JS = `
-      (function () {
-        function postHeight() {
-          var height = Math.max(
-            document.body ? document.body.scrollHeight : 0,
-            document.documentElement ? document.documentElement.scrollHeight : 0
-          );
-          window.ReactNativeWebView && window.ReactNativeWebView.postMessage(String(height));
-        }
-        setTimeout(postHeight, 50);
-        setTimeout(postHeight, 250);
-        setTimeout(postHeight, 750);
-        window.addEventListener('load', postHeight);
-      })();
-      true;
-    `;
+    const websiteItemUrl =
+      `https://whatyoudink.com/clinic/item.php?slug=${encodeURIComponent(view.slug)}&app=1` +
+      (view.pathSlug ? `&path=${encodeURIComponent(view.pathSlug)}&step=${encodeURIComponent(String(view.step ?? ""))}` : "");
 
     return (
       <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
@@ -775,7 +975,7 @@ export default function ClinicTab() {
           {!item ? (
             <View style={styles.box}>
               {loading ? <ActivityIndicator color={stylesVars.text} /> : null}
-              <Text style={styles.muted}>{loading ? "Loading…" : "Loading…"}</Text>
+              <Text style={styles.muted}>Loading…</Text>
               {!loading ? (
                 <Pressable onPress={() => loadItem(view.slug)} style={({ pressed }) => [styles.primaryBtn, pressed && styles.btnPressed]}>
                   <Text style={styles.primaryBtnText}>Retry</Text>
@@ -788,15 +988,20 @@ export default function ClinicTab() {
                 ref={webViewRef}
                 source={{ uri: websiteItemUrl }}
                 originWhitelist={["*"]}
-                injectedJavaScript={WEBVIEW_HEIGHT_JS}
+                injectedJavaScript={injectedJS}
+                onShouldStartLoadWithRequest={(req) => interceptClinicNav(req.url)}
                 onMessage={(e) => {
-                  const h = parseInt(String(e.nativeEvent.data || ""), 10);
-                  if (!Number.isFinite(h)) return;
-                  if (h < 200) return;
-                  // Prevent runaway sizes if a page misbehaves.
-                  setWebViewHeight(Math.min(h, 20000));
+                  try {
+                    const msg = JSON.parse(String(e.nativeEvent.data || "{}"));
+                    if (msg?.type === "HEIGHT" && typeof msg.height === "number") {
+                      const h = Math.max(300, Math.min(msg.height, 50000));
+                      setWebViewHeight(h);
+                    }
+                  } catch {
+                    const h = parseInt(String(e.nativeEvent.data || ""), 10);
+                    if (Number.isFinite(h) && h > 200) setWebViewHeight(Math.min(h, 50000));
+                  }
                 }}
-                // Let the native ScrollView handle scroll + pull-to-refresh.
                 scrollEnabled={false}
                 style={{ width: "100%", height: webViewHeight, backgroundColor: "transparent" }}
                 startInLoadingState
@@ -842,9 +1047,12 @@ const styles = StyleSheet.create({
 
   header: { paddingHorizontal: 14, paddingBottom: 10 },
   headerRow: {
-    justifyContent: "flex-start", flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
   h1: { fontSize: 28, fontWeight: "900", color: stylesVars.text, letterSpacing: -0.3 },
-  sub: { marginTop: 6, color: stylesVars.textDim, fontSize: 13, lineHeight: 18 },
 
   headerBtn: {
     flexDirection: "row",
@@ -913,57 +1121,84 @@ const styles = StyleSheet.create({
   thumb: { width: "48%", borderRadius: 18, overflow: "hidden", backgroundColor: stylesVars.card, borderWidth: 1, borderColor: stylesVars.cardBorder },
   thumbImgWrap: { width: "100%", aspectRatio: 16 / 10, backgroundColor: "rgba(255,255,255,0.04)" },
   thumbImg: { width: "100%", height: "100%" },
-  thumbImgFallback: { flex: 1, backgroundColor: "rgba(255,255,255,0.04)" },
+  thumbImgFallback: { width: "100%", height: "100%", backgroundColor: "rgba(255,255,255,0.05)" },
   thumbBody: { padding: 10 },
-  thumbTitle: { fontWeight: "900", fontSize: 13, color: stylesVars.text },
+  thumbTitle: { color: stylesVars.text, fontWeight: "900", fontSize: 13 },
   thumbSub: { marginTop: 4, color: stylesVars.textDim, fontSize: 12, lineHeight: 16 },
 
-  row: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 18, backgroundColor: stylesVars.card, borderWidth: 1, borderColor: stylesVars.cardBorder, marginBottom: 10 },
-  rowPressed: { backgroundColor: "rgba(255,255,255,0.09)" },
-  rowImgWrap: { width: 56, height: 56, borderRadius: 14, overflow: "hidden", backgroundColor: "rgba(255,255,255,0.04)" },
-  rowImg: { width: "100%", height: "100%" },
-  rowImgFallback: { flex: 1, backgroundColor: "rgba(255,255,255,0.04)" },
-  rowTitle: { fontSize: 14, fontWeight: "900", color: stylesVars.text },
-  rowSub: { marginTop: 3, color: stylesVars.textDim, fontSize: 12, lineHeight: 16 },
-  rowMeta: { marginTop: 5, color: stylesVars.textFaint, fontSize: 12, fontWeight: "800" },
-
-  filters: { paddingHorizontal: 14, paddingBottom: 10, flexDirection: "row", gap: 8, alignItems: "center" },
-  search: {
-    flex: 1,
-    height: 40,
-    borderRadius: 14,
-    paddingHorizontal: 12,
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 12,
+    borderRadius: 16,
     backgroundColor: stylesVars.card,
     borderWidth: 1,
     borderColor: stylesVars.cardBorder,
+    marginBottom: 10,
+  },
+  rowPressed: { backgroundColor: "rgba(255,255,255,0.09)" },
+  rowImgWrap: { width: 56, height: 42, borderRadius: 12, overflow: "hidden", backgroundColor: "rgba(255,255,255,0.04)" },
+  rowImg: { width: "100%", height: "100%" },
+  rowImgFallback: { width: "100%", height: "100%", backgroundColor: "rgba(255,255,255,0.05)" },
+  rowTitle: { color: stylesVars.text, fontWeight: "900", fontSize: 14 },
+  rowSub: { marginTop: 3, color: stylesVars.textDim, fontSize: 12, lineHeight: 16 },
+  rowMeta: { marginTop: 6, color: stylesVars.textFaint, fontSize: 12 },
+
+  filters: { flexDirection: "row", gap: 10, paddingHorizontal: 14, paddingBottom: 10 },
+  search: {
+    flex: 1,
+    backgroundColor: stylesVars.card,
+    borderWidth: 1,
+    borderColor: stylesVars.cardBorder,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     color: stylesVars.text,
   },
-  pill: { height: 40, paddingHorizontal: 10, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: stylesVars.card, borderWidth: 1, borderColor: stylesVars.cardBorder },
-  pillText: { fontWeight: "900", fontSize: 12, color: stylesVars.text },
-  pillGo: { width: 40, height: 40, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: stylesVars.accent },
+  filterIconBtn: {
+    width: 44,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: stylesVars.card,
+    borderWidth: 1,
+    borderColor: stylesVars.cardBorder,
+  },
 
+  box: { padding: 16, borderRadius: 18, backgroundColor: stylesVars.card, borderWidth: 1, borderColor: stylesVars.cardBorder, alignItems: "center", gap: 10, marginTop: 10 },
+  muted: { color: stylesVars.textDim },
 
-  filterIconBtn: { width: 40, height: 40, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: stylesVars.card, borderWidth: 1, borderColor: stylesVars.cardBorder },
-
-  filterSection: { padding: 14, borderRadius: 18, backgroundColor: stylesVars.card, borderWidth: 1, borderColor: stylesVars.cardBorder, marginBottom: 12 },
-  filterSectionTitle: { fontSize: 14, fontWeight: "900", color: stylesVars.text, marginBottom: 10 },
-  filterRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12, paddingHorizontal: 12, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.03)", borderWidth: 1, borderColor: "rgba(255,255,255,0.06)", marginBottom: 10 },
-  filterRowText: { fontSize: 13, fontWeight: "800", color: stylesVars.text },
-
-  secondaryBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 12, paddingHorizontal: 14, borderRadius: 16, backgroundColor: stylesVars.card, borderWidth: 1, borderColor: stylesVars.cardBorder },
-  secondaryBtnText: { fontWeight: "900", color: stylesVars.text },
-
-  primaryBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 12, paddingHorizontal: 14, borderRadius: 16, backgroundColor: stylesVars.accent },
+  primaryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: stylesVars.accent,
+  },
   primaryBtnText: { fontWeight: "900", color: stylesVars.accentInk },
 
-  box: { marginTop: 12, padding: 14, borderRadius: 18, backgroundColor: stylesVars.card, borderWidth: 1, borderColor: stylesVars.cardBorder, alignItems: "center", gap: 10 },
-  muted: { color: stylesVars.textDim, fontWeight: "700" },
+  secondaryBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: stylesVars.card,
+    borderWidth: 1,
+    borderColor: stylesVars.cardBorder,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  secondaryBtnText: { fontWeight: "900", color: stylesVars.text },
+
+  filterSection: { marginTop: 10, marginBottom: 10, borderRadius: 18, overflow: "hidden", borderWidth: 1, borderColor: stylesVars.cardBorder, backgroundColor: stylesVars.card },
+  filterSectionTitle: { padding: 12, fontWeight: "900", color: stylesVars.text, borderBottomWidth: 1, borderBottomColor: stylesVars.cardBorder },
+  filterRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: stylesVars.cardBorder },
+  filterRowText: { color: stylesVars.text, fontWeight: "800" },
 
   heroImg: { width: "100%", aspectRatio: 16 / 10, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.04)" },
-  itemTitle: { fontSize: 20, fontWeight: "900", color: stylesVars.text },
-  itemMeta: { marginTop: 6, color: stylesVars.textDim, fontWeight: "900" },
-  itemExcerpt: { color: stylesVars.textDim, lineHeight: 20 },
-
-  htmlBox: { padding: 14, borderRadius: 18, backgroundColor: stylesVars.card, borderWidth: 1, borderColor: stylesVars.cardBorder },
-  htmlHint: { color: stylesVars.textDim, lineHeight: 18, fontWeight: "700" },
+  itemTitle: { color: stylesVars.text, fontWeight: "900", fontSize: 20 },
+  itemMeta: { marginTop: 6, color: stylesVars.textDim, fontSize: 13 },
+  itemExcerpt: { color: stylesVars.textDim, fontSize: 14, lineHeight: 20 },
 });
