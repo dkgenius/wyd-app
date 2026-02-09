@@ -8,6 +8,7 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -321,7 +322,23 @@ export default function ClinicTab() {
   const webViewRef = useRef<WebView>(null);
   const [webViewHeight, setWebViewHeight] = useState(800);
 
-  const start = useCallback(async <T,>(fn: (signal: AbortSignal) => Promise<T>) => {
+  
+
+  // WebView auto-height can occasionally spike (especially around images/lightboxes in app webviews).
+  // Clamp + ignore one-off jumps to prevent huge blank space and "bottom steps" appearing far down.
+  const MIN_WEB_H = 500;
+  const MAX_WEB_H = 20000;
+
+  const applyWebHeight = useCallback((raw: number) => {
+    if (!Number.isFinite(raw)) return;
+    const next = Math.max(MIN_WEB_H, Math.min(raw, MAX_WEB_H));
+    setWebViewHeight((prev) => {
+      // Ignore sudden unrealistic spikes (transient measurements during image/layout changes)
+      if (next > prev * 1.6 && next - prev > 1200) return prev;
+      return next;
+    });
+  }, []);
+const start = useCallback(async <T,>(fn: (signal: AbortSignal) => Promise<T>) => {
     abortRef.current?.abort();
     const ac = new AbortController();
     abortRef.current = ac;
@@ -421,6 +438,14 @@ export default function ClinicTab() {
     })();
   }, [view, topics, paths, topicItems, pathSteps, itemDetail, loadTopics, loadPaths, loadTopic, loadPath, loadItem]);
 
+  // Reset web height when switching to a new item/quiz so we don't carry over an old tall height.
+  useEffect(() => {
+    if (view.name === "item" || view.name === "quiz") {
+      setWebViewHeight(800);
+    }
+  }, [view.name, (view as any).slug]);
+
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -446,7 +471,36 @@ export default function ClinicTab() {
     }
   }, [view, loadTopics, loadPaths, loadTopic, loadPath, loadItem]);
 
-  // Header: user wants only Back + Home (no title) on deeper screens.
+  
+  const onShare = useCallback(async () => {
+    if (!(view.name === "item" || view.name === "quiz")) return;
+
+    const slug = view.slug;
+    const isItem = view.name === "item";
+    const title =
+      (isItem ? itemDetail[slug]?.title : view.title) ||
+      (isItem ? "Clinic Item" : "Clinic Quiz");
+
+    const base = isItem ? "https://whatyoudink.com/clinic/item.php" : "https://whatyoudink.com/clinic/quiz.php";
+    const params = new URLSearchParams();
+    params.set("slug", String(slug));
+    if (view.pathSlug) params.set("path", String(view.pathSlug));
+    if (typeof view.step === "number") params.set("step", String(view.step));
+
+    const shareUrl = `${base}?${params.toString()}`;
+
+    try {
+      await Share.share({
+        title,
+        message: `${title}\n\n${shareUrl}`,
+        url: shareUrl,
+      });
+    } catch (e) {
+      console.warn("Share cancelled or failed", e);
+    }
+  }, [view, itemDetail]);
+
+// Header: user wants only Back + Home (no title) on deeper screens.
   const header = (
     <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
       {stack.length > 1 ? (
@@ -457,6 +511,12 @@ export default function ClinicTab() {
           </Pressable>
 
           <View style={{ flex: 1 }} />
+
+          {view.name === "item" || view.name === "quiz" ? (
+            <Pressable onPress={onShare} style={({ pressed }) => [styles.headerIconBtn, pressed && styles.btnPressed]}>
+              <Ionicons name="share-outline" size={18} color={stylesVars.text} />
+            </Pressable>
+          ) : null}
 
           <Pressable onPress={goHome} style={({ pressed }) => [styles.headerIconBtn, pressed && styles.btnPressed]}>
             <Ionicons name="home-outline" size={18} color={stylesVars.text} />
@@ -935,12 +995,12 @@ export default function ClinicTab() {
                   const msg = JSON.parse(String(e.nativeEvent.data || "{}"));
                   if (msg?.type === "HEIGHT" && typeof msg.height === "number") {
                     const h = Math.max(300, Math.min(msg.height, 50000));
-                    setWebViewHeight(h);
+                    applyWebHeight(h);
                   }
                 } catch {
                   // backwards compat if older web pages send plain number
                   const h = parseInt(String(e.nativeEvent.data || ""), 10);
-                  if (Number.isFinite(h) && h > 200) setWebViewHeight(Math.min(h, 50000));
+                  if (Number.isFinite(h) && h > 200) applyWebHeight(h);
                 }
               }}
               scrollEnabled={false}
@@ -995,11 +1055,11 @@ export default function ClinicTab() {
                     const msg = JSON.parse(String(e.nativeEvent.data || "{}"));
                     if (msg?.type === "HEIGHT" && typeof msg.height === "number") {
                       const h = Math.max(300, Math.min(msg.height, 50000));
-                      setWebViewHeight(h);
+                      applyWebHeight(h);
                     }
                   } catch {
                     const h = parseInt(String(e.nativeEvent.data || ""), 10);
-                    if (Number.isFinite(h) && h > 200) setWebViewHeight(Math.min(h, 50000));
+                    if (Number.isFinite(h) && h > 200) applyWebHeight(h);
                   }
                 }}
                 scrollEnabled={false}
