@@ -1,0 +1,48 @@
+// app/webview.tsx
+import React from "react";
+import { View, ActivityIndicator, StyleSheet } from "react-native";
+import { useLocalSearchParams, Stack } from "expo-router";
+import { WebView } from "react-native-webview";
+
+export default function WebviewScreen() {
+  const { url } = useLocalSearchParams<{ url: string }>();
+
+  if (!url) return null;
+
+  const title =
+    url.includes("privacy")
+      ? "Privacy Policy"
+      : url.includes("terms")
+      ? "Terms of Service"
+      : "Web";
+
+  return (
+    <>
+      <Stack.Screen options={{ title }} />
+
+      <View style={styles.container}>
+        <WebView
+          source={{ uri: url }}
+          startInLoadingState
+          renderLoading={() => (
+            <View style={styles.loader}>
+              <ActivityIndicator size="large" color="#ffffff" />
+            </View>
+          )}
+        />
+      </View>
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#0b0f14",
+  },
+  loader: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+});

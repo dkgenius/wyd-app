@@ -1,47 +1,144 @@
 // app/(tabs)/videos.tsx
 import React, { useCallback } from "react";
-import { Alert, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Image, Pressable, StyleSheet, Text, View, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Linking from "expo-linking";
 import { FontAwesome, Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import * as Clipboard from "expo-clipboard";
 
 const CHANNEL_HANDLE = "@whatyoudink";
-const CHANNEL_URL = `https://www.youtube.com/${CHANNEL_HANDLE}`;
 
-const INSTAGRAM_URL = "https://www.instagram.com/whatyoudink";
-const TIKTOK_URL = "https://www.tiktok.com/@whatyoudink";
+// Web URLs (always valid fallbacks)
+const YT_WEB = `https://www.youtube.com/${CHANNEL_HANDLE}`;
+const YT_SUB_WEB = `https://www.youtube.com/${CHANNEL_HANDLE}?sub_confirmation=1`;
 
-const SUBSCRIBE_URL = `https://www.youtube.com/${CHANNEL_HANDLE}?sub_confirmation=1`;
+const USERNAME = "whatyoudink";
 
-async function openUrl(url: string) {
+const IG_WEB = `https://www.instagram.com/${USERNAME}/`;
+// Best-effort to open IG app (Android intent). NOTE: IG may still land on Home depending on IG version/settings.
+const IG_ANDROID_INTENT = `intent://instagram.com/_u/${USERNAME}/#Intent;package=com.instagram.android;scheme=https;end`;
+// iOS deep link (best-effort)
+const IG_IOS = `instagram://user?username=${USERNAME}`;
+
+const TT_WEB = `https://www.tiktok.com/@${USERNAME}`;
+// Best-effort TikTok scheme (varies by device/version)
+const TT_IOS = `snssdk1233://user/profile/${USERNAME}`;
+const TT_ANDROID_INTENT = `intent://www.tiktok.com/@${USERNAME}#Intent;package=com.zhiliaoapp.musically;scheme=https;end`;
+
+const PRIVACY_URL = "https://www.whatyoudink.com/privacy/?app=1";
+const TERMS_URL = "https://www.whatyoudink.com/terms/?app=1";
+
+async function openWeb(url: string, label: string) {
   try {
-    const can = await Linking.canOpenURL(url);
-    if (!can) throw new Error("Cannot open link");
+    // Do NOT gate on canOpenURL for https: it can be unreliable on Android
     await Linking.openURL(url);
   } catch {
-    Alert.alert("Videos", "Could not open YouTube. Please try again.");
+    Alert.alert(label, "Could not open link. Please try again.");
   }
 }
 
-export default function VideosTab() {
-  const onOpenChannel = useCallback(() => openUrl(CHANNEL_URL), []);
-  const onSubscribe = useCallback(() => openUrl(SUBSCRIBE_URL), []);
-  const onOpenInstagram = useCallback(() => openUrl(INSTAGRAM_URL), []);
-  const onOpenTikTok = useCallback(() => openUrl(TIKTOK_URL), []);
+async function openPreferApp(appUrl: string, webUrl: string, label: string) {
+  try {
+    await Linking.openURL(appUrl);
+  } catch {
+    await openWeb(webUrl, label);
+  }
+}
+
+async function copyUsername() {
+  try {
+    await Clipboard.setStringAsync(`@${USERNAME}`);
+  } catch {
+    // If copy fails, we still try to open the app
+  }
+}
+
+async function openInstagramWithCopy() {
+  await copyUsername();
+
+  try {
+    if (Platform.OS === "android") {
+      // Best-effort: open IG app and attempt profile route
+      await Linking.openURL(IG_ANDROID_INTENT);
+      return;
+    }
+
+    // iOS best-effort deep link (may still land on Home)
+    await openPreferApp(IG_IOS, IG_WEB, "Instagram");
+  } catch {
+    // Fallback to web (may open browser or app depending on system)
+    await openWeb(IG_WEB, "Instagram");
+  }
+}
+
+async function openTikTokWithCopy() {
+  await copyUsername();
+
+  try {
+    if (Platform.OS === "android") {
+      // Try intent first, then web
+      try {
+        await Linking.openURL(TT_ANDROID_INTENT);
+        return;
+      } catch {
+        // fall through
+      }
+      await openWeb(TT_WEB, "TikTok");
+      return;
+    }
+
+    // iOS: try scheme, then web
+    await openPreferApp(TT_IOS, TT_WEB, "TikTok");
+  } catch {
+    await openWeb(TT_WEB, "TikTok");
+  }
+}
+
+export default function AboutTab() {
+  const router = useRouter();
+
+  const onOpenYouTube = useCallback(
+    () => openPreferApp(`vnd.youtube://www.youtube.com/${CHANNEL_HANDLE}`, YT_WEB, "YouTube"),
+    []
+  );
+  const onSubscribe = useCallback(() => openWeb(YT_SUB_WEB, "YouTube"), []);
+
+  const onInstagramPress = useCallback(async () => {
+    await openInstagramWithCopy();
+    Alert.alert("Copied", `@${USERNAME} copied. If Instagram opens Home, paste/search @${USERNAME}.`);
+  }, []);
+
+  const onTikTokPress = useCallback(async () => {
+    await openTikTokWithCopy();
+    Alert.alert("Copied", `@${USERNAME} copied. If TikTok doesn’t open the profile, paste/search @${USERNAME}.`);
+  }, []);
+
+  const openPrivacy = useCallback(() => {
+    router.push({ pathname: "/webview", params: { url: PRIVACY_URL, title: "Privacy Policy" } });
+  }, [router]);
+
+  const openTerms = useCallback(() => {
+    router.push({ pathname: "/webview", params: { url: TERMS_URL, title: "Terms of Service" } });
+  }, [router]);
 
   return (
     <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
       <View style={styles.wrap}>
-        <Text style={styles.h1}>Videos</Text>
+        <Text style={styles.h1}>About</Text>
 
         <View style={styles.logoWrap}>
-          <Image source={require("../../assets/images/icon.png")} style={styles.logo} resizeMode="contain" />
+          <Image
+            source={require("../../assets/images/whatyoudinklogo-outline.png")}
+            style={styles.logo}
+            resizeMode="contain"
+          />
         </View>
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>{CHANNEL_HANDLE}</Text>
 
-          <Pressable onPress={onOpenChannel} style={({ pressed }) => [styles.btn, pressed && styles.btnPressed]}>
+          <Pressable onPress={onOpenYouTube} style={({ pressed }) => [styles.btn, pressed && styles.btnPressed]}>
             <Text style={styles.btnText}>Open YouTube Channel</Text>
           </Pressable>
 
@@ -50,28 +147,36 @@ export default function VideosTab() {
           </Pressable>
         </View>
 
-
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Follow</Text>
 
           <View style={styles.socialRow}>
-            <Pressable onPress={onOpenInstagram} style={({ pressed }) => [styles.socialBtn, pressed && styles.btnPressed]}>
+            <Pressable onPress={onInstagramPress} style={({ pressed }) => [styles.socialBtn, pressed && styles.btnPressed]}>
               <FontAwesome name="instagram" size={18} color="rgba(255,255,255,0.92)" />
-              <Text style={styles.socialText}>Instagram</Text>
+              <Text style={styles.socialText}>@{USERNAME}</Text>
             </Pressable>
 
-            <Pressable onPress={onOpenTikTok} style={({ pressed }) => [styles.socialBtn, pressed && styles.btnPressed]}>
+            <Pressable onPress={onTikTokPress} style={({ pressed }) => [styles.socialBtn, pressed && styles.btnPressed]}>
               <Ionicons name="logo-tiktok" size={18} color="rgba(255,255,255,0.92)" />
-              <Text style={styles.socialText}>TikTok</Text>
+              <Text style={styles.socialText}>@{USERNAME}</Text>
             </Pressable>
           </View>
+
+          <Text style={styles.hint}>
+            Tip: If the app opens to Home, paste/search @{USERNAME}.
+          </Text>
         </View>
 
-        <View style={styles.cardSoft}>
-          <Text style={styles.cardTitle}>Coming Soon</Text>
-          <Text style={styles.cardSub}>
-            Video Library will be coming soon!
-          </Text>
+        <View style={styles.footer}>
+          <Pressable onPress={openPrivacy} hitSlop={10}>
+            <Text style={styles.footerLink}>Privacy Policy</Text>
+          </Pressable>
+
+          <Text style={styles.footerDivider}>•</Text>
+
+          <Pressable onPress={openTerms} hitSlop={10}>
+            <Text style={styles.footerLink}>Terms of Service</Text>
+          </Pressable>
         </View>
       </View>
     </SafeAreaView>
@@ -83,7 +188,6 @@ const styles = StyleSheet.create({
   wrap: { padding: 14, paddingBottom: 28 },
 
   h1: { fontSize: 28, fontWeight: "800", color: "rgba(255,255,255,0.92)", letterSpacing: -0.3 },
-  sub: { marginTop: 4, fontSize: 14, color: "rgba(255,255,255,0.60)" },
 
   card: {
     marginTop: 14,
@@ -93,17 +197,8 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.04)",
     padding: 14,
   },
-  cardSoft: {
-    marginTop: 12,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
-    backgroundColor: "rgba(255,255,255,0.03)",
-    padding: 14,
-  },
 
   cardTitle: { color: "rgba(255,255,255,0.92)", fontWeight: "900", fontSize: 16 },
-  cardSub: { marginTop: 6, color: "rgba(255,255,255,0.60)", lineHeight: 18 },
 
   btn: {
     marginTop: 12,
@@ -146,5 +241,24 @@ const styles = StyleSheet.create({
   },
   socialText: { color: "rgba(255,255,255,0.92)", fontWeight: "900" },
 
-  muted: { marginTop: 12, color: "rgba(255,255,255,0.55)", fontSize: 12, lineHeight: 16 },
+  hint: {
+    marginTop: 12,
+    color: "rgba(255,255,255,0.55)",
+    fontSize: 12,
+    lineHeight: 16,
+  },
+
+  footer: {
+    marginTop: 18,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+  },
+  footerLink: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.55)",
+    textDecorationLine: "underline",
+  },
+  footerDivider: { fontSize: 12, color: "rgba(255,255,255,0.35)" },
 });

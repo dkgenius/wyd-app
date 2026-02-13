@@ -973,6 +973,7 @@ const start = useCallback(async <T,>(fn: (signal: AbortSignal) => Promise<T>) =>
     );
   }
 
+
   if (view.name === "quiz") {
     const websiteQuizUrl =
       `https://whatyoudink.com/clinic/quiz.php?slug=${encodeURIComponent(view.slug)}&app=1` +
@@ -982,44 +983,32 @@ const start = useCallback(async <T,>(fn: (signal: AbortSignal) => Promise<T>) =>
       <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
         {header}
 
-        <ScrollView contentContainerStyle={styles.scroll} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={stylesVars.text} />}>
-          <View style={{ flex: 1 }}>
-            <WebView
-              ref={webViewRef}
-              source={{ uri: websiteQuizUrl }}
-              originWhitelist={["*"]}
-              injectedJavaScript={injectedJS}
-              onShouldStartLoadWithRequest={(req) => interceptClinicNav(req.url)}
-              onMessage={(e) => {
-                try {
-                  const msg = JSON.parse(String(e.nativeEvent.data || "{}"));
-                  if (msg?.type === "HEIGHT" && typeof msg.height === "number") {
-                    const h = Math.max(300, Math.min(msg.height, 50000));
-                    applyWebHeight(h);
-                  }
-                } catch {
-                  // backwards compat if older web pages send plain number
-                  const h = parseInt(String(e.nativeEvent.data || ""), 10);
-                  if (Number.isFinite(h) && h > 200) applyWebHeight(h);
-                }
-              }}
-              scrollEnabled={false}
-              style={{ width: "100%", height: webViewHeight, backgroundColor: "transparent" }}
-              startInLoadingState
-              renderLoading={() => (
-                <View style={styles.box}>
-                  <ActivityIndicator color={stylesVars.text} />
-                  <Text style={styles.muted}>Loading…</Text>
-                </View>
-              )}
-            />
-          </View>
-
-          <View style={{ height: insets.bottom + 24 }} />
-        </ScrollView>
+        <View style={{ flex: 1 }}>
+          <WebView
+            ref={webViewRef}
+            source={{ uri: websiteQuizUrl }}
+            originWhitelist={["*"]}
+            injectedJavaScript={injectedJS}
+            onShouldStartLoadWithRequest={(req) => interceptClinicNav(req.url)}
+            // IMPORTANT: allow the WebView to scroll so fixed/sticky footers behave correctly.
+            scrollEnabled
+            // Prevent iOS from resizing content / messing with insets unexpectedly.
+            contentInsetAdjustmentBehavior="never"
+            style={{ flex: 1, backgroundColor: "transparent" }}
+            startInLoadingState
+            renderLoading={() => (
+              <View style={styles.box}>
+                <ActivityIndicator color={stylesVars.text} />
+                <Text style={styles.muted}>Loading…</Text>
+              </View>
+            )}
+          />
+        </View>
       </SafeAreaView>
     );
   }
+
+
 
   if (view.name === "item") {
     const item = itemDetail[view.slug];
@@ -1031,49 +1020,41 @@ const start = useCallback(async <T,>(fn: (signal: AbortSignal) => Promise<T>) =>
       <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
         {header}
 
-        <ScrollView contentContainerStyle={styles.scroll} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={stylesVars.text} />}>
-          {!item ? (
-            <View style={styles.box}>
-              {loading ? <ActivityIndicator color={stylesVars.text} /> : null}
-              <Text style={styles.muted}>Loading…</Text>
-              {!loading ? (
-                <Pressable onPress={() => loadItem(view.slug)} style={({ pressed }) => [styles.primaryBtn, pressed && styles.btnPressed]}>
-                  <Text style={styles.primaryBtnText}>Retry</Text>
-                </Pressable>
-              ) : null}
-            </View>
-          ) : compact(item.content_html) ? (
-            <View style={{ flex: 1 }}>
-              <WebView
-                ref={webViewRef}
-                source={{ uri: websiteItemUrl }}
-                originWhitelist={["*"]}
-                injectedJavaScript={injectedJS}
-                onShouldStartLoadWithRequest={(req) => interceptClinicNav(req.url)}
-                onMessage={(e) => {
-                  try {
-                    const msg = JSON.parse(String(e.nativeEvent.data || "{}"));
-                    if (msg?.type === "HEIGHT" && typeof msg.height === "number") {
-                      const h = Math.max(300, Math.min(msg.height, 50000));
-                      applyWebHeight(h);
-                    }
-                  } catch {
-                    const h = parseInt(String(e.nativeEvent.data || ""), 10);
-                    if (Number.isFinite(h) && h > 200) applyWebHeight(h);
-                  }
-                }}
-                scrollEnabled={false}
-                style={{ width: "100%", height: webViewHeight, backgroundColor: "transparent" }}
-                startInLoadingState
-                renderLoading={() => (
-                  <View style={styles.box}>
-                    <ActivityIndicator color={stylesVars.text} />
-                    <Text style={styles.muted}>Loading…</Text>
-                  </View>
-                )}
-              />
-            </View>
-          ) : (
+        {!item ? (
+          <View style={[styles.box, { flex: 1 }]}>
+            {loading ? <ActivityIndicator color={stylesVars.text} /> : null}
+            <Text style={styles.muted}>Loading…</Text>
+            {!loading ? (
+              <Pressable onPress={() => loadItem(view.slug)} style={({ pressed }) => [styles.primaryBtn, pressed && styles.btnPressed]}>
+                <Text style={styles.primaryBtnText}>Retry</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : compact(item.content_html) ? (
+          // IMPORTANT: Do NOT wrap this WebView inside a ScrollView with scrollEnabled={false}.
+          // That combination breaks position:fixed/sticky footers in WebViews and can cause content to be "cut off".
+          <View style={{ flex: 1 }}>
+            <WebView
+              ref={webViewRef}
+              source={{ uri: websiteItemUrl }}
+              originWhitelist={["*"]}
+              injectedJavaScript={injectedJS}
+              onShouldStartLoadWithRequest={(req) => interceptClinicNav(req.url)}
+              scrollEnabled
+              contentInsetAdjustmentBehavior="never"
+              automaticallyAdjustContentInsets={false}
+              style={{ flex: 1, backgroundColor: "transparent" }}
+              startInLoadingState
+              renderLoading={() => (
+                <View style={styles.box}>
+                  <ActivityIndicator color={stylesVars.text} />
+                  <Text style={styles.muted}>Loading…</Text>
+                </View>
+              )}
+            />
+          </View>
+        ) : (
+          <ScrollView contentContainerStyle={styles.scroll} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={stylesVars.text} />}>
             <View style={{ gap: 12 }}>
               {compact(item.featured_image_url) ? <Image source={{ uri: item.featured_image_url! }} style={styles.heroImg} /> : null}
 
@@ -1091,13 +1072,14 @@ const start = useCallback(async <T,>(fn: (signal: AbortSignal) => Promise<T>) =>
                 </Pressable>
               ) : null}
             </View>
-          )}
 
-          <View style={{ height: insets.bottom + 24 }} />
-        </ScrollView>
+            <View style={{ height: insets.bottom + 24 }} />
+          </ScrollView>
+        )}
       </SafeAreaView>
     );
   }
+
 
   return null;
 }

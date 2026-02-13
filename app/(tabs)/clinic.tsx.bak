@@ -8,6 +8,7 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -470,7 +471,36 @@ const start = useCallback(async <T,>(fn: (signal: AbortSignal) => Promise<T>) =>
     }
   }, [view, loadTopics, loadPaths, loadTopic, loadPath, loadItem]);
 
-  // Header: user wants only Back + Home (no title) on deeper screens.
+  
+  const onShare = useCallback(async () => {
+    if (!(view.name === "item" || view.name === "quiz")) return;
+
+    const slug = view.slug;
+    const isItem = view.name === "item";
+    const title =
+      (isItem ? itemDetail[slug]?.title : view.title) ||
+      (isItem ? "Clinic Item" : "Clinic Quiz");
+
+    const base = isItem ? "https://whatyoudink.com/clinic/item.php" : "https://whatyoudink.com/clinic/quiz.php";
+    const params = new URLSearchParams();
+    params.set("slug", String(slug));
+    if (view.pathSlug) params.set("path", String(view.pathSlug));
+    if (typeof view.step === "number") params.set("step", String(view.step));
+
+    const shareUrl = `${base}?${params.toString()}`;
+
+    try {
+      await Share.share({
+        title,
+        message: `${title}\n\n${shareUrl}`,
+        url: shareUrl,
+      });
+    } catch (e) {
+      console.warn("Share cancelled or failed", e);
+    }
+  }, [view, itemDetail]);
+
+// Header: user wants only Back + Home (no title) on deeper screens.
   const header = (
     <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
       {stack.length > 1 ? (
@@ -481,6 +511,12 @@ const start = useCallback(async <T,>(fn: (signal: AbortSignal) => Promise<T>) =>
           </Pressable>
 
           <View style={{ flex: 1 }} />
+
+          {view.name === "item" || view.name === "quiz" ? (
+            <Pressable onPress={onShare} style={({ pressed }) => [styles.headerIconBtn, pressed && styles.btnPressed]}>
+              <Ionicons name="share-outline" size={18} color={stylesVars.text} />
+            </Pressable>
+          ) : null}
 
           <Pressable onPress={goHome} style={({ pressed }) => [styles.headerIconBtn, pressed && styles.btnPressed]}>
             <Ionicons name="home-outline" size={18} color={stylesVars.text} />

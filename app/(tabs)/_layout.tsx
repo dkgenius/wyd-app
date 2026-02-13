@@ -82,10 +82,10 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="videos"
         options={{
-          title: "Videos",
-          tabBarLabel: "Videos",
+          title: "About",
+          tabBarLabel: "About",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="play-circle-outline" size={size} color={color} />
+            <Ionicons name="information-circle-outline" size={size} color={color} />
           ),
         }}
       />
