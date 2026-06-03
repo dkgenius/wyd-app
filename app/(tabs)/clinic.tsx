@@ -79,8 +79,6 @@ type ViewState =
   | { name: "item"; slug: string; title?: string; pathSlug?: string; step?: number }
   | { name: "quiz"; slug: string; title?: string; pathSlug?: string; step?: number };
 
-type ItemType = "guide" | "lesson" | "drill" | "troubleshoot";
-
 const TYPE_LABEL: Record<string, string> = {
   guide: "Guide",
   lesson: "Lesson",
@@ -132,7 +130,7 @@ const TYPE_META: Record<
   },
 };
 
-const TYPE_ORDER: ItemType[] = ["guide", "lesson", "drill", "troubleshoot"];
+const TYPE_ORDER = ["guide", "lesson", "drill", "troubleshoot"] as const;
 
 function compact(s?: string | null) {
   const t = (s ?? "").trim();
@@ -306,43 +304,6 @@ function StepsChip({ count }: { count?: number | null }) {
         {count} step{count === 1 ? "" : "s"}
       </Body>
     </View>
-  );
-}
-
-/* Big content-type tile on the Home screen */
-function TypeTile({
-  type,
-  onPress,
-}: {
-  type: ItemType;
-  onPress: () => void;
-}) {
-  const meta = TYPE_META[type];
-  const description: Record<ItemType, string> = {
-    guide: "Reference & how-to articles",
-    lesson: "Structured teaching content",
-    drill: "Repeatable practice routines",
-    troubleshoot: "Fix common mistakes",
-  };
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        s.typeTile,
-        { borderColor: meta.border },
-        pressed && { opacity: 0.92, transform: [{ scale: 0.99 }] },
-      ]}
-    >
-      <View style={[s.typeTileIcon, { backgroundColor: meta.bg, borderColor: meta.border }]}>
-        <Ionicons name={meta.icon} size={22} color={meta.color} />
-      </View>
-      <Title style={[s.typeTileTitle, { color: meta.color }]} numberOfLines={1}>
-        {meta.label}s
-      </Title>
-      <Muted style={s.typeTileDesc} numberOfLines={2}>
-        {description[type]}
-      </Muted>
-    </Pressable>
   );
 }
 
@@ -840,8 +801,10 @@ export default function ClinicTab() {
 
   /* ───────── HOME ───────── */
   if (view.name === "home") {
+    const allPaths = paths ?? [];
+    const featuredPath = allPaths[0];
+    const morePaths = allPaths.slice(1, 4);
     const topTopics = (topics ?? []).slice(0, 6);
-    const topPaths = (paths ?? []).slice(0, 3);
 
     return (
       <SafeAreaView style={s.screen} edges={["top", "left", "right"]}>
@@ -863,68 +826,62 @@ export default function ClinicTab() {
             LEVEL UP{"\n"}YOUR GAME.
           </Display>
           <Muted style={s.heroSub}>
-            Guides, lessons, drills, and structured paths to take your pickleball further.
+            Curated training paths and topic-by-topic lessons to take your pickleball further.
           </Muted>
 
-          {/* Content-type tiles */}
-          <View style={s.typeGrid}>
-            {TYPE_ORDER.map((t) => (
-              <TypeTile
-                key={t}
-                type={t}
-                onPress={() => {
-                  setType(t);
-                  setQ("");
-                  setLevel("");
-                  push({ name: "topics" });
-                }}
-              />
-            ))}
-          </View>
-
-          {/* Featured paths */}
-          <View style={s.sectionHead}>
-            <Eyebrow>Featured Paths</Eyebrow>
-            <Pressable
-              onPress={() => push({ name: "paths" })}
-              style={({ pressed }) => [s.seeAll, pressed && { opacity: 0.7 }]}
-              hitSlop={6}
-            >
-              <Body weight="bold" style={s.seeAllText}>
-                See all
-              </Body>
-              <Ionicons name="arrow-forward" size={14} color={Colors.muted} />
-            </Pressable>
-          </View>
-
+          {/* Start here — the first / featured path */}
           {loading && !paths ? (
-            <View style={s.loadingBlock}>
+            <View style={[s.loadingBlock, { marginTop: Spacing.xxl }]}>
               <ActivityIndicator color={Colors.ball} />
-              <Muted style={{ marginTop: 10 }}>Loading paths…</Muted>
+              <Muted style={{ marginTop: 10 }}>Loading…</Muted>
             </View>
-          ) : topPaths.length ? (
-            <View style={{ gap: 14 }}>
-              {topPaths.map((p) => (
-                <FeaturedPathCard
-                  key={p.id}
-                  path={p}
-                  onPress={() => push({ name: "path", slug: p.slug, title: p.name })}
-                />
-              ))}
+          ) : featuredPath ? (
+            <View style={{ marginTop: Spacing.xxl }}>
+              <View style={s.startEyebrowRow}>
+                <View style={s.startDot} />
+                <Eyebrow>Start here</Eyebrow>
+              </View>
+              <FeaturedPathCard
+                path={featuredPath}
+                onPress={() =>
+                  push({ name: "path", slug: featuredPath.slug, title: featuredPath.name })
+                }
+              />
             </View>
-          ) : (
-            <Pressable
-              onPress={loadPaths}
-              style={({ pressed }) => [s.emptyCard, pressed && { opacity: 0.9 }]}
-            >
-              <Body weight="extrabold">No paths yet.</Body>
-              <Muted style={{ marginTop: 6 }}>Pull to retry.</Muted>
-            </Pressable>
-          )}
+          ) : null}
 
-          {/* Popular topics */}
+          {/* More paths */}
+          {morePaths.length ? (
+            <>
+              <View style={s.sectionHead}>
+                <Eyebrow>More Training Paths</Eyebrow>
+                <Pressable
+                  onPress={() => push({ name: "paths" })}
+                  style={({ pressed }) => [s.seeAll, pressed && { opacity: 0.7 }]}
+                  hitSlop={6}
+                >
+                  <Body weight="bold" style={s.seeAllText}>
+                    See all
+                  </Body>
+                  <Ionicons name="arrow-forward" size={14} color={Colors.muted} />
+                </Pressable>
+              </View>
+
+              <View style={{ gap: 14 }}>
+                {morePaths.map((p) => (
+                  <FeaturedPathCard
+                    key={p.id}
+                    path={p}
+                    onPress={() => push({ name: "path", slug: p.slug, title: p.name })}
+                  />
+                ))}
+              </View>
+            </>
+          ) : null}
+
+          {/* Browse topics */}
           <View style={s.sectionHead}>
-            <Eyebrow>Popular Topics</Eyebrow>
+            <Eyebrow>Browse Topics</Eyebrow>
             <Pressable
               onPress={() => {
                 setType("");
@@ -978,20 +935,6 @@ export default function ClinicTab() {
     return (
       <SafeAreaView style={s.screen} edges={["top", "left", "right"]}>
         {TopBar}
-
-        {type ? (
-          <View style={s.activeFilterBanner}>
-            <Ionicons name="filter" size={14} color={Colors.ball} />
-            <Body weight="bold" style={{ color: Colors.ball, fontSize: 12.5 }}>
-              Type pre-filtered: {TYPE_LABEL[type] ?? type}
-            </Body>
-            <Pressable onPress={() => setType("")} hitSlop={8} style={{ marginLeft: "auto" }}>
-              <Body weight="bold" style={{ color: Colors.muted, fontSize: 12 }}>
-                Clear
-              </Body>
-            </Pressable>
-          </View>
-        ) : null}
 
         <View style={s.headerSection}>
           <Eyebrow>Browse</Eyebrow>
@@ -1562,38 +1505,18 @@ const s = StyleSheet.create({
     maxWidth: 320,
   },
 
-  /* Type tiles */
-  typeGrid: {
-    marginTop: Spacing.xxl,
+  /* "Start here" eyebrow row with ball-green dot */
+  startEyebrowRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.md,
-  },
-  typeTile: {
-    flexBasis: "47%",
-    flexGrow: 1,
-    padding: Spacing.lg,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    backgroundColor: Colors.card,
-  },
-  typeTileIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.md,
     alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
+    gap: 8,
     marginBottom: Spacing.md,
   },
-  typeTileTitle: {
-    fontSize: 18,
-    lineHeight: 22,
-  },
-  typeTileDesc: {
-    marginTop: 4,
-    fontSize: 12.5,
-    lineHeight: 17,
+  startDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: Colors.ball,
   },
 
   /* Section headers */
@@ -1862,21 +1785,6 @@ const s = StyleSheet.create({
     borderColor: Colors.border,
     backgroundColor: Colors.card,
     alignItems: "center",
-  },
-
-  /* Active filter banner */
-  activeFilterBanner: {
-    marginHorizontal: Spacing.screenPadH,
-    marginBottom: Spacing.sm,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.ballDim,
-    borderWidth: 1,
-    borderColor: Colors.ballSoft,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
   },
 
   /* Buttons */
