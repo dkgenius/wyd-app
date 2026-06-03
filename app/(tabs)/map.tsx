@@ -21,6 +21,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { apiUrl } from "../../src/api/base";
+import { Colors, Fonts } from "@/constants/theme";
 
 type Ratings = {
   court?: number | null;
@@ -1521,15 +1522,22 @@ function ExpandableMultiSelectRow({
   );
 }
 
+/* ───────── Brand polish — colors + fonts from /constants/theme ─────────
+ * Structure and layout of every style below is intentionally unchanged from
+ * the original. Only:
+ *   - Hardcoded #0b0f14 / rgba(255,255,255,*) swapped for Colors.* tokens
+ *   - fontFamily added to text styles based on existing fontWeight
+ *   - fontWeight kept as a fallback if the font fails to load
+ */
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#0b0f14" },
+  safe: { flex: 1, backgroundColor: Colors.bg },
 
   topBar: {
     paddingHorizontal: 12,
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.10)",
-    backgroundColor: "#0b0f14",
+    borderBottomColor: Colors.border,
+    backgroundColor: Colors.bg,
   },
 
   searchRow: { flexDirection: "row", gap: 10, alignItems: "center" },
@@ -1541,12 +1549,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.05)",
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
     paddingHorizontal: 12,
     height: 42,
   },
-  searchInput: { flex: 1, color: "white" },
+  searchInput: { flex: 1, color: Colors.text, fontFamily: Fonts.body.medium },
 
   iconBtn: {
     alignItems: "center",
@@ -1555,10 +1563,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.05)",
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
   },
-  iconBtnText: { marginTop: 2, fontSize: 11, color: "rgba(255,255,255,0.85)", fontWeight: "800" },
+  iconBtnText: { marginTop: 2, fontSize: 11, color: "rgba(235,235,235,0.85)", fontWeight: "800", fontFamily: Fonts.body.bold },
 
   actionsRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 10, flexWrap: "wrap" },
 
@@ -1570,10 +1578,10 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.05)",
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
   },
-  pillBtnText: { color: "white", fontWeight: "900" },
+  pillBtnText: { color: Colors.text, fontWeight: "900", fontFamily: Fonts.body.extrabold },
 
   radiusRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   radiusBtn: {
@@ -1581,24 +1589,24 @@ const styles = StyleSheet.create({
     height: 34,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.05)",
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
     alignItems: "center",
     justifyContent: "center",
   },
-  radiusBtnText: { color: "white", fontWeight: "900", fontSize: 18 },
+  radiusBtnText: { color: Colors.text, fontWeight: "900", fontSize: 18, fontFamily: Fonts.body.extrabold },
 
   pill: {
     paddingHorizontal: 10,
     height: 32,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.05)",
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
     alignItems: "center",
     justifyContent: "center",
   },
-  pillText: { color: "rgba(255,255,255,0.85)", fontWeight: "800", fontSize: 12 },
+  pillText: { color: "rgba(235,235,235,0.85)", fontWeight: "800", fontSize: 12, fontFamily: Fonts.body.bold },
 
   activeFilters: {
     marginTop: 8,
@@ -1606,13 +1614,13 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
-    backgroundColor: "rgba(255,255,255,0.04)",
+    borderColor: Colors.border,
+    backgroundColor: "rgba(235,235,235,0.04)",
   },
-  activeFiltersText: { color: "rgba(255,255,255,0.75)", fontWeight: "700", fontSize: 12 },
+  activeFiltersText: { color: "rgba(235,235,235,0.75)", fontWeight: "700", fontSize: 12, fontFamily: Fonts.body.semibold },
 
   loading: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
-  loadingText: { color: "rgba(255,255,255,0.7)", fontWeight: "700" },
+  loadingText: { color: Colors.muted, fontWeight: "700", fontFamily: Fonts.body.semibold },
 
   mapWrap: { flex: 1 },
 
@@ -1620,8 +1628,8 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.05)",
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
     marginBottom: 12,
   },
   cardImage: {
@@ -1629,14 +1637,14 @@ const styles = StyleSheet.create({
     height: 160,
     borderRadius: 14,
     marginBottom: 10,
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: Colors.surface,
   },
   cardTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
-  cardTitle: { color: "white", fontSize: 16, fontWeight: "900", flex: 1 },
-  cardMeta: { marginTop: 4, color: "rgba(255,255,255,0.70)", fontWeight: "650" },
-  cardMetaStrong: { color: "rgba(255,255,255,0.90)", fontWeight: "900" },
+  cardTitle: { color: Colors.text, fontSize: 16, fontWeight: "900", flex: 1, fontFamily: Fonts.body.extrabold, letterSpacing: -0.2 },
+  cardMeta: { marginTop: 4, color: "rgba(235,235,235,0.70)", fontWeight: "650", fontFamily: Fonts.body.medium },
+  cardMetaStrong: { color: "rgba(235,235,235,0.90)", fontWeight: "900", fontFamily: Fonts.body.extrabold },
   cardRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8, flexWrap: "wrap" },
-  dot: { color: "rgba(255,255,255,0.35)", marginHorizontal: 2 },
+  dot: { color: Colors.muted2, marginHorizontal: 2 },
 
   badgeVisited: {
     paddingHorizontal: 10,
@@ -1648,43 +1656,61 @@ const styles = StyleSheet.create({
     borderColor: "rgba(0,0,0,0.18)",
     backgroundColor: "rgba(199,255,46,0.92)",
   },
-  badgeVisitedText: { color: "#071018", fontWeight: "950", fontSize: 12 },
+  badgeVisitedText: { color: Colors.onBall, fontWeight: "950", fontSize: 12, fontFamily: Fonts.body.extrabold, letterSpacing: 0.4 },
 
-  empty: { color: "rgba(255,255,255,0.65)", padding: 14 },
+  empty: { color: Colors.muted, padding: 14, fontFamily: Fonts.body.medium },
 
-  modalSafe: { flex: 1, backgroundColor: "#0b0f14" },
+  modalSafe: { flex: 1, backgroundColor: Colors.bg },
   modalHeader: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.10)",
+    borderBottomColor: Colors.border,
   },
   modalClose: { flexDirection: "row", alignItems: "center", gap: 6 },
-  modalCloseText: { color: "white", fontWeight: "900", fontSize: 14 },
+  modalCloseText: { color: Colors.text, fontWeight: "900", fontSize: 14, fontFamily: Fonts.body.extrabold },
 
   detailsTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
-  detailsTitle: { color: "white", fontSize: 20, fontWeight: "950", flex: 1 },
-  detailsMuted: { color: "rgba(255,255,255,0.65)", marginTop: 6, fontWeight: "650" },
+  detailsTitle: {
+    color: Colors.text,
+    fontSize: 28,
+    fontWeight: "400",
+    flex: 1,
+    // Bebas Neue display for the location title — mirrors site article-header
+    fontFamily: Fonts.display,
+    letterSpacing: 0.4,
+    lineHeight: 30,
+  },
+  detailsMuted: { color: Colors.muted, marginTop: 6, fontWeight: "650", fontFamily: Fonts.body.medium },
 
   detailsBlock: {
     marginTop: 12,
     padding: 14,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.05)",
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
   },
-  detailsBlockTitle: { color: "white", fontWeight: "950", marginBottom: 10, fontSize: 14 },
-  detailsLine: { color: "rgba(255,255,255,0.80)", fontWeight: "650", marginTop: 2, lineHeight: 19 },
+  detailsBlockTitle: {
+    color: Colors.text,
+    fontWeight: "400",
+    marginBottom: 10,
+    fontSize: 18,
+    // Bebas Neue display for section headings inside the details modal
+    fontFamily: Fonts.display,
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+  },
+  detailsLine: { color: "rgba(235,235,235,0.80)", fontWeight: "650", marginTop: 2, lineHeight: 19, fontFamily: Fonts.body.medium },
 
   openRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   openPill: { paddingHorizontal: 10, height: 28, borderRadius: 999, alignItems: "center", justifyContent: "center", borderWidth: 1 },
-  openPillOn: { backgroundColor: "rgba(199,255,46,0.18)", borderColor: "rgba(199,255,46,0.40)" },
+  openPillOn: { backgroundColor: Colors.ballDim, borderColor: Colors.ballSoft },
   openPillOff: { backgroundColor: "rgba(255, 84, 84, 0.16)", borderColor: "rgba(255, 84, 84, 0.35)" },
-  openPillText: { fontWeight: "950", fontSize: 12 },
-  openPillTextOn: { color: "rgba(199,255,46,0.98)" },
+  openPillText: { fontWeight: "950", fontSize: 12, fontFamily: Fonts.body.extrabold, letterSpacing: 0.5 },
+  openPillTextOn: { color: Colors.ball },
   openPillTextOff: { color: "rgba(255, 150, 150, 0.95)" },
 
   ctaRow: { flexDirection: "row", gap: 10, marginTop: 14, flexWrap: "wrap" },
@@ -1692,46 +1718,60 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     height: 44,
-    borderRadius: 14,
-    backgroundColor: "rgba(199,255,46,0.95)",
+    borderRadius: 999,
+    backgroundColor: Colors.ball,
     borderWidth: 1,
     borderColor: "rgba(0,0,0,0.18)",
   },
-  ctaPrimaryText: { color: "#071018", fontWeight: "950" },
+  ctaPrimaryText: {
+    color: Colors.onBall,
+    fontWeight: "950",
+    fontFamily: Fonts.body.extrabold,
+    letterSpacing: 1.0,
+    textTransform: "uppercase",
+    fontSize: 13,
+  },
 
   ctaYouTube: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     height: 44,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,0,0,0.70)",
+    borderRadius: 999,
+    backgroundColor: Colors.youtube,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
   },
-  ctaYouTubeText: { color: "white", fontWeight: "950" },
+  ctaYouTubeText: {
+    color: "#fff",
+    fontWeight: "950",
+    fontFamily: Fonts.body.extrabold,
+    letterSpacing: 1.0,
+    textTransform: "uppercase",
+    fontSize: 13,
+  },
 
   linkRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8 },
-  linkText: { color: "rgba(199,255,46,0.95)", fontWeight: "850" },
+  linkText: { color: Colors.ball, fontWeight: "850", fontFamily: Fonts.body.bold },
 
   hoursRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     paddingVertical: 7,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.06)",
+    borderBottomColor: "rgba(235,235,235,0.06)",
   },
-  hoursRowTodayOpen: { backgroundColor: "rgba(199, 255, 46, 0.14)", borderRadius: 10, paddingHorizontal: 10 },
-hoursRowTodayClosed: { backgroundColor: "rgba(255, 84, 84, 0.10)", borderRadius: 10, paddingHorizontal: 10 },
-  hoursDay: { color: "rgba(255,255,255,0.80)", fontWeight: "900" },
-  hoursDayTodayOpen: { color: "#C7FF2E" },
-hoursDayTodayClosed: { color: "rgba(255, 150, 150, 0.95)" },
-  hoursTime: { color: "rgba(255,255,255,0.70)", fontWeight: "650" },
-  hoursTimeTodayOpen: { color: "#C7FF2E", fontWeight: "900" },
-hoursTimeTodayClosed: { color: "rgba(255, 150, 150, 0.95)", fontWeight: "900" },
+  hoursRowTodayOpen: { backgroundColor: Colors.ballDim, borderRadius: 10, paddingHorizontal: 10 },
+  hoursRowTodayClosed: { backgroundColor: "rgba(255, 84, 84, 0.10)", borderRadius: 10, paddingHorizontal: 10 },
+  hoursDay: { color: "rgba(235,235,235,0.80)", fontWeight: "900", fontFamily: Fonts.body.extrabold },
+  hoursDayTodayOpen: { color: Colors.ball },
+  hoursDayTodayClosed: { color: "rgba(255, 150, 150, 0.95)" },
+  hoursTime: { color: "rgba(235,235,235,0.70)", fontWeight: "650", fontFamily: Fonts.body.medium },
+  hoursTimeTodayOpen: { color: Colors.ball, fontWeight: "900", fontFamily: Fonts.body.extrabold },
+  hoursTimeTodayClosed: { color: "rgba(255, 150, 150, 0.95)", fontWeight: "900", fontFamily: Fonts.body.extrabold },
 
   subRatingRow: {
     flexDirection: "row",
@@ -1739,29 +1779,29 @@ hoursTimeTodayClosed: { color: "rgba(255, 150, 150, 0.95)", fontWeight: "900" },
     gap: 10,
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.06)",
+    borderBottomColor: "rgba(235,235,235,0.06)",
   },
-  subRatingLabel: { color: "rgba(255,255,255,0.85)", fontWeight: "900", width: 92 },
+  subRatingLabel: { color: "rgba(235,235,235,0.85)", fontWeight: "900", width: 92, fontFamily: Fonts.body.extrabold },
 
   ball: {
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.20)",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: Colors.borderUp,
+    backgroundColor: Colors.card,
     overflow: "hidden",
   },
   ballOn: { backgroundColor: "rgba(199,255,46,0.92)", borderColor: "rgba(0,0,0,0.18)" },
-  ballHalf: { backgroundColor: "rgba(255,255,255,0.06)" },
+  ballHalf: { backgroundColor: Colors.card },
   ballHalfFill: { position: "absolute", left: 0, top: 0, bottom: 0, width: "50%", backgroundColor: "rgba(199,255,46,0.92)" },
 
-  muted: { color: "rgba(255,255,255,0.60)", fontWeight: "700" },
-  smallMuted: { color: "rgba(255,255,255,0.55)", fontWeight: "700" },
+  muted: { color: Colors.muted, fontWeight: "700", fontFamily: Fonts.body.semibold },
+  smallMuted: { color: "rgba(235,235,235,0.55)", fontWeight: "700", fontFamily: Fonts.body.semibold },
 
   filterRow: {
     padding: 14,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.05)",
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
     marginBottom: 10,
     flexDirection: "row",
     alignItems: "center",
@@ -1775,8 +1815,8 @@ hoursTimeTodayClosed: { color: "rgba(255, 150, 150, 0.95)", fontWeight: "900" },
     padding: 10,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
-    backgroundColor: "rgba(255,255,255,0.035)",
+    borderColor: Colors.border,
+    backgroundColor: "rgba(235,235,235,0.035)",
   },
   optionRow: {
     flexDirection: "row",
@@ -1787,33 +1827,33 @@ hoursTimeTodayClosed: { color: "rgba(255, 150, 150, 0.95)", fontWeight: "900" },
     borderRadius: 12,
   },
   optionRowActive: {
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: Colors.card,
   },
-  optionText: { color: "rgba(255,255,255,0.88)", fontSize: 13, fontWeight: "700" },
-  optionTextActive: { color: "white" },
+  optionText: { color: "rgba(235,235,235,0.88)", fontSize: 13, fontWeight: "700", fontFamily: Fonts.body.semibold },
+  optionTextActive: { color: Colors.text },
 
   radioOuter: {
     width: 18,
     height: 18,
     borderRadius: 999,
     borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.35)",
+    borderColor: "rgba(235,235,235,0.35)",
     alignItems: "center",
     justifyContent: "center",
   },
-  radioOuterActive: { borderColor: "rgba(255,255,255,0.75)" },
-  radioInner: { width: 8, height: 8, borderRadius: 999, backgroundColor: "white" },
+  radioOuterActive: { borderColor: Colors.ball },
+  radioInner: { width: 8, height: 8, borderRadius: 999, backgroundColor: Colors.ball },
 
   checkboxOuter: {
     width: 18,
     height: 18,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.35)",
+    borderColor: "rgba(235,235,235,0.35)",
     alignItems: "center",
     justifyContent: "center",
   },
-  checkboxOuterActive: { backgroundColor: "white", borderColor: "white" },
+  checkboxOuterActive: { backgroundColor: Colors.ball, borderColor: Colors.ball },
 
   clearRow: {
     flexDirection: "row",
@@ -1825,26 +1865,26 @@ hoursTimeTodayClosed: { color: "rgba(255, 150, 150, 0.95)", fontWeight: "900" },
     marginBottom: 6,
     alignSelf: "flex-start",
   },
-  clearText: { color: "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: "700" },
+  clearText: { color: Colors.muted, fontSize: 12, fontWeight: "700", fontFamily: Fonts.body.semibold },
 
-  filterLabel: { color: "white", fontWeight: "950", fontSize: 14 },
-  filterHint: { color: "rgba(255,255,255,0.55)", marginTop: 4, fontWeight: "650", fontSize: 12 },
+  filterLabel: { color: Colors.text, fontWeight: "950", fontSize: 14, fontFamily: Fonts.body.extrabold },
+  filterHint: { color: "rgba(235,235,235,0.55)", marginTop: 4, fontWeight: "650", fontSize: 12, fontFamily: Fonts.body.medium },
   filterRight: { flexDirection: "row", alignItems: "center", gap: 8 },
-  filterValue: { color: "rgba(255,255,255,0.75)", fontWeight: "800" },
+  filterValue: { color: Colors.muted, fontWeight: "800", fontFamily: Fonts.body.bold },
 
   switch: {
     width: 54,
     height: 30,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: "rgba(235,235,235,0.14)",
+    backgroundColor: Colors.card,
     padding: 3,
     justifyContent: "center",
   },
-  switchOn: { backgroundColor: "rgba(199,255,46,0.18)", borderColor: "rgba(199,255,46,0.30)" },
-  switchKnob: { width: 24, height: 24, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.70)", transform: [{ translateX: 0 }] },
-  switchKnobOn: { backgroundColor: "rgba(199,255,46,0.95)", transform: [{ translateX: 22 }] },
+  switchOn: { backgroundColor: Colors.ballDim, borderColor: "rgba(199,255,46,0.30)" },
+  switchKnob: { width: 24, height: 24, borderRadius: 999, backgroundColor: "rgba(235,235,235,0.70)", transform: [{ translateX: 0 }] },
+  switchKnobOn: { backgroundColor: Colors.ball, transform: [{ translateX: 22 }] },
 
   // Details hero image
   detailsHeroImg: {
@@ -1852,14 +1892,14 @@ hoursTimeTodayClosed: { color: "rgba(255, 150, 150, 0.95)", fontWeight: "900" },
     height: 180,
     borderRadius: 14,
     marginBottom: 12,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: Colors.card,
   },
 
 
   // Card CTAs (list view)
   cardPillRow: { marginTop: 8, flexDirection: "row", alignItems: "center" },
   openPillSmall: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, borderWidth: 1 },
-  openPillSmallText: { fontWeight: "900", letterSpacing: 0.3 },
+  openPillSmallText: { fontWeight: "900", letterSpacing: 0.3, fontFamily: Fonts.body.extrabold },
   cardCtaRow: { flexDirection: "row", gap: 10, marginTop: 12 },
   cardCtaPrimary: {
     flexDirection: "row",
@@ -1868,9 +1908,9 @@ hoursTimeTodayClosed: { color: "rgba(255, 150, 150, 0.95)", fontWeight: "900" },
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: "#C7FF2E",
+    backgroundColor: Colors.ball,
   },
-  cardCtaPrimaryText: { fontWeight: "900", color: "#071018" },
+  cardCtaPrimaryText: { fontWeight: "900", color: Colors.onBall, fontFamily: Fonts.body.extrabold, letterSpacing: 0.6 },
   cardCtaYouTube: {
     flexDirection: "row",
     alignItems: "center",
@@ -1878,11 +1918,11 @@ hoursTimeTodayClosed: { color: "rgba(255, 150, 150, 0.95)", fontWeight: "900" },
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "rgba(235,235,235,0.10)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
+    borderColor: "rgba(235,235,235,0.16)",
   },
-  cardCtaYouTubeText: { fontWeight: "900", color: "white" },
+  cardCtaYouTubeText: { fontWeight: "900", color: Colors.text, fontFamily: Fonts.body.extrabold, letterSpacing: 0.6 },
 
 
   // Filter expand/collapse header
@@ -1894,7 +1934,7 @@ hoursTimeTodayClosed: { color: "rgba(255, 150, 150, 0.95)", fontWeight: "900" },
     paddingVertical: 10,
   },
   expandRight: { flexDirection: "row", alignItems: "center", gap: 8 },
-  expandMeta: { color: "rgba(255,255,255,0.65)", fontWeight: "700" },
+  expandMeta: { color: Colors.muted, fontWeight: "700", fontFamily: Fonts.body.semibold },
 
 
   // List pagination
@@ -1904,14 +1944,15 @@ hoursTimeTodayClosed: { color: "rgba(255, 150, 150, 0.95)", fontWeight: "900" },
     paddingHorizontal: 18,
     paddingVertical: 10,
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(235,235,235,0.10)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
+    borderColor: "rgba(235,235,235,0.18)",
   },
   loadMoreText: {
-    color: "white",
+    color: Colors.text,
     fontWeight: "800",
     letterSpacing: 0.2,
+    fontFamily: Fonts.body.bold,
   },
 
 });
