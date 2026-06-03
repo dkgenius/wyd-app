@@ -1,5 +1,5 @@
 // app/(tabs)/clinic.tsx
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -10,15 +10,18 @@ import {
   ScrollView,
   Share,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { WebView } from "react-native-webview";
-import { apiUrl } from "../../src/api/base";
 
+import { apiUrl } from "../../src/api/base";
+import { Body, Display, Eyebrow, Muted, Subtitle, Title } from "@/components/ui";
+import { Colors, Fonts, Radius, Spacing, TypeScale } from "@/constants/theme";
+
+/* ───────── Types ───────── */
 type Topic = {
   id: number;
   name: string;
@@ -62,9 +65,9 @@ type PathStep = {
   step_no: number;
   step_title: string;
   note?: string | null;
-  step_type?: "item" | "quiz"; // default: item
-  item?: Item; // present when step_type=item
-  quiz?: Quiz; // present when step_type=quiz
+  step_type?: "item" | "quiz";
+  item?: Item;
+  quiz?: Quiz;
 };
 
 type ViewState =
@@ -74,8 +77,9 @@ type ViewState =
   | { name: "paths" }
   | { name: "path"; slug: string; title?: string }
   | { name: "item"; slug: string; title?: string; pathSlug?: string; step?: number }
-  | { name: "quiz"; slug: string; title?: string; pathSlug?: string; step?: number }
-  | { name: "filters"; slug: string; title?: string };
+  | { name: "quiz"; slug: string; title?: string; pathSlug?: string; step?: number };
+
+type ItemType = "guide" | "lesson" | "drill" | "troubleshoot";
 
 const TYPE_LABEL: Record<string, string> = {
   guide: "Guide",
@@ -90,19 +94,49 @@ const LEVEL_LABEL: Record<string, string> = {
   all: "All levels",
 };
 
+/**
+ * Type-color mapping — each clinic item type gets a distinct accent so users
+ * can scan a list and see what's a Drill vs a Guide at a glance.
+ */
+const TYPE_META: Record<
+  string,
+  { label: string; color: string; bg: string; border: string; icon: keyof typeof Ionicons.glyphMap }
+> = {
+  guide: {
+    label: "Guide",
+    color: "#7ec6ff",
+    bg: "rgba(126,198,255,0.12)",
+    border: "rgba(126,198,255,0.40)",
+    icon: "document-text-outline",
+  },
+  lesson: {
+    label: "Lesson",
+    color: Colors.ball,
+    bg: Colors.ballDim,
+    border: Colors.ballSoft,
+    icon: "school-outline",
+  },
+  drill: {
+    label: "Drill",
+    color: "#ffae42",
+    bg: "rgba(255,174,66,0.14)",
+    border: "rgba(255,174,66,0.45)",
+    icon: "barbell-outline",
+  },
+  troubleshoot: {
+    label: "Troubleshoot",
+    color: "#ff8b6b",
+    bg: "rgba(255,139,107,0.14)",
+    border: "rgba(255,139,107,0.42)",
+    icon: "construct-outline",
+  },
+};
+
+const TYPE_ORDER: ItemType[] = ["guide", "lesson", "drill", "troubleshoot"];
+
 function compact(s?: string | null) {
   const t = (s ?? "").trim();
   return t.length ? t : null;
-}
-
-function pillText(it: { item_type?: string | null; skill_level?: string | null; est_minutes?: number | null }) {
-  const parts: string[] = [];
-  const t = compact(it.item_type)?.toLowerCase();
-  const l = compact(it.skill_level)?.toLowerCase();
-  if (t && TYPE_LABEL[t]) parts.push(TYPE_LABEL[t]);
-  if (l && LEVEL_LABEL[l]) parts.push(LEVEL_LABEL[l]);
-  if (typeof it.est_minutes === "number") parts.push(`${it.est_minutes} min`);
-  return parts.join(" • ");
 }
 
 async function fetchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
@@ -110,91 +144,7 @@ async function fetchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   return (await res.json()) as T;
 }
 
-function SmallThumb({
-  title,
-  subtitle,
-  imageUrl,
-  onPress,
-}: {
-  title: string;
-  subtitle?: string | null;
-  imageUrl?: string | null;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.thumb, pressed && { opacity: 0.9 }]}>
-      <View style={styles.thumbImgWrap}>
-        {imageUrl ? <Image source={{ uri: imageUrl }} style={styles.thumbImg} /> : <View style={styles.thumbImgFallback} />}
-      </View>
-      <View style={styles.thumbBody}>
-        <Text style={styles.thumbTitle} numberOfLines={2}>
-          {title}
-        </Text>
-        {subtitle ? (
-          <Text style={styles.thumbSub} numberOfLines={2}>
-            {subtitle}
-          </Text>
-        ) : null}
-      </View>
-    </Pressable>
-  );
-}
-
-function Row({
-  title,
-  subtitle,
-  meta,
-  imageUrl,
-  onPress,
-}: {
-  title: string;
-  subtitle?: string | null;
-  meta?: string | null;
-  imageUrl?: string | null;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
-      <View style={styles.rowImgWrap}>
-        {imageUrl ? <Image source={{ uri: imageUrl }} style={styles.rowImg} /> : <View style={styles.rowImgFallback} />}
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.rowTitle} numberOfLines={2}>
-          {title}
-        </Text>
-        {subtitle ? (
-          <Text style={styles.rowSub} numberOfLines={2}>
-            {subtitle}
-          </Text>
-        ) : null}
-        {meta ? (
-          <Text style={styles.rowMeta} numberOfLines={1}>
-            {meta}
-          </Text>
-        ) : null}
-      </View>
-      <Ionicons name="chevron-forward" size={18} color={stylesVars.textDim} style={{ opacity: 0.9 }} />
-    </Pressable>
-  );
-}
-
-const stylesVars = {
-  bg: "#0b0f1a",
-  card: "rgba(255,255,255,0.06)",
-  cardBorder: "rgba(255,255,255,0.09)",
-  text: "rgba(255,255,255,0.92)",
-  textDim: "rgba(255,255,255,0.72)",
-  textFaint: "rgba(255,255,255,0.58)",
-  accent: "#c7ff2e",
-  accentInk: "#0b0f1a",
-};
-
-/**
- * A robust WebView JS bridge that:
- * - hides common website chrome (best-effort),
- * - forces scroll to top,
- * - posts height updates on load, resize, image load, and DOM mutations.
- */
+/* ───────── WebView injected JS — unchanged ───────── */
 function makeInjectedJS() {
   return `
   (function () {
@@ -244,7 +194,6 @@ function makeInjectedJS() {
       }catch(e){}
     }
 
-    // Kickoff
     hardTop();
     postHeight();
     bindImages();
@@ -266,7 +215,6 @@ function makeInjectedJS() {
       setTimeout(postHeight, 50);
     });
 
-    // Observe DOM changes (e.g., lightbox open/close, lazy content)
     try{
       var mo = new MutationObserver(function(){
         bindImages();
@@ -275,7 +223,6 @@ function makeInjectedJS() {
       mo.observe(document.documentElement, { childList:true, subtree:true, attributes:true });
     }catch(e){}
 
-    // Short polling window helps slow networks / late layout shifts
     var tries = 0;
     var t = setInterval(function(){
       tries++;
@@ -287,28 +234,340 @@ function makeInjectedJS() {
   `;
 }
 
+/* ═════════════════════════════════════════════════════════════════
+   Presentational helpers — small reusable pieces used by the views
+   ═════════════════════════════════════════════════════════════════ */
+
+/* Color-coded type badge — Guide / Lesson / Drill / Troubleshoot */
+function TypeBadge({ type, size = "default" }: { type?: string | null; size?: "default" | "sm" }) {
+  const t = (type ?? "").toLowerCase();
+  const meta = TYPE_META[t];
+  if (!meta) return null;
+  const isSm = size === "sm";
+  return (
+    <View
+      style={[
+        s.typeBadge,
+        { backgroundColor: meta.bg, borderColor: meta.border },
+        isSm && { paddingHorizontal: 8, paddingVertical: 2 },
+      ]}
+    >
+      <Ionicons name={meta.icon} size={isSm ? 11 : 13} color={meta.color} />
+      <Body
+        weight="extrabold"
+        style={{
+          color: meta.color,
+          fontSize: isSm ? 10 : 11,
+          letterSpacing: 1.2,
+          textTransform: "uppercase",
+        }}
+      >
+        {meta.label}
+      </Body>
+    </View>
+  );
+}
+
+/* Skill-level chip — neutral */
+function LevelChip({ level }: { level?: string | null }) {
+  const l = (level ?? "").toLowerCase();
+  const label = LEVEL_LABEL[l];
+  if (!label) return null;
+  return (
+    <View style={s.metaChip}>
+      <Ionicons name="trending-up-outline" size={11} color={Colors.muted} />
+      <Body weight="bold" style={s.metaChipText}>
+        {label}
+      </Body>
+    </View>
+  );
+}
+
+/* Minutes chip */
+function MinChip({ minutes }: { minutes?: number | null }) {
+  if (typeof minutes !== "number" || minutes <= 0) return null;
+  return (
+    <View style={s.metaChip}>
+      <Ionicons name="time-outline" size={11} color={Colors.muted} />
+      <Body weight="bold" style={s.metaChipText}>
+        {minutes} min
+      </Body>
+    </View>
+  );
+}
+
+/* Steps chip (for paths) */
+function StepsChip({ count }: { count?: number | null }) {
+  if (typeof count !== "number" || count <= 0) return null;
+  return (
+    <View style={s.metaChip}>
+      <Ionicons name="footsteps-outline" size={11} color={Colors.muted} />
+      <Body weight="bold" style={s.metaChipText}>
+        {count} step{count === 1 ? "" : "s"}
+      </Body>
+    </View>
+  );
+}
+
+/* Big content-type tile on the Home screen */
+function TypeTile({
+  type,
+  onPress,
+}: {
+  type: ItemType;
+  onPress: () => void;
+}) {
+  const meta = TYPE_META[type];
+  const description: Record<ItemType, string> = {
+    guide: "Reference & how-to articles",
+    lesson: "Structured teaching content",
+    drill: "Repeatable practice routines",
+    troubleshoot: "Fix common mistakes",
+  };
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        s.typeTile,
+        { borderColor: meta.border },
+        pressed && { opacity: 0.92, transform: [{ scale: 0.99 }] },
+      ]}
+    >
+      <View style={[s.typeTileIcon, { backgroundColor: meta.bg, borderColor: meta.border }]}>
+        <Ionicons name={meta.icon} size={22} color={meta.color} />
+      </View>
+      <Title style={[s.typeTileTitle, { color: meta.color }]} numberOfLines={1}>
+        {meta.label}s
+      </Title>
+      <Muted style={s.typeTileDesc} numberOfLines={2}>
+        {description[type]}
+      </Muted>
+    </Pressable>
+  );
+}
+
+/* Big featured path card with image, name, meta chips, step count */
+function FeaturedPathCard({ path, onPress }: { path: Path; onPress: () => void }) {
+  const img = compact(path.featured_image_url);
+  const level = compact(path.intended_level);
+  const steps = path.step_count;
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [s.pathCard, pressed && { opacity: 0.94 }]}>
+      <View style={s.pathThumb}>
+        {img ? (
+          <Image source={{ uri: img }} style={s.pathImg} resizeMode="cover" />
+        ) : (
+          <View style={s.pathImgFallback}>
+            <Ionicons name="map-outline" size={36} color={Colors.muted2} />
+          </View>
+        )}
+        <View style={s.pathBadge}>
+          <Ionicons name="footsteps" size={11} color={Colors.onBall} />
+          <Body weight="extrabold" style={s.pathBadgeText}>
+            {typeof steps === "number" ? `${steps} step${steps === 1 ? "" : "s"}` : "Path"}
+          </Body>
+        </View>
+      </View>
+      <View style={s.pathBody}>
+        <Eyebrow style={{ marginBottom: 6 }}>Training Path</Eyebrow>
+        <Title numberOfLines={2} style={{ fontSize: 19, lineHeight: 24 }}>
+          {path.name}
+        </Title>
+        {compact(path.description) ? (
+          <Muted numberOfLines={2} style={{ marginTop: 6 }}>
+            {path.description}
+          </Muted>
+        ) : null}
+        <View style={[s.chipRow, { marginTop: Spacing.md }]}>
+          {level ? <LevelChip level={level} /> : null}
+          {typeof path.est_total_minutes === "number" ? <MinChip minutes={path.est_total_minutes} /> : null}
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+/* 2-col topic tile — featured image as full background */
+function TopicTile({ topic, onPress }: { topic: Topic; onPress: () => void }) {
+  const img = compact(topic.featured_image_url);
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [s.topicTile, pressed && { opacity: 0.92 }]}>
+      <View style={s.topicTileImgWrap}>
+        {img ? (
+          <Image source={{ uri: img }} style={s.topicTileImg} resizeMode="cover" />
+        ) : (
+          <View style={s.topicTileFallback}>
+            <Ionicons name="albums-outline" size={28} color={Colors.muted2} />
+          </View>
+        )}
+        <View style={s.topicTileScrim} />
+        <View style={s.topicTileTitleWrap}>
+          <Title
+            numberOfLines={2}
+            style={{ fontSize: 16, lineHeight: 20, color: Colors.text }}
+          >
+            {topic.name}
+          </Title>
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+/* Item card used in topic lists and search */
+function ItemCard({ item, onPress }: { item: Item; onPress: () => void }) {
+  const img = compact(item.featured_image_url);
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [s.itemCard, pressed && { opacity: 0.95 }]}>
+      <View style={s.itemImgWrap}>
+        {img ? (
+          <Image source={{ uri: img }} style={s.itemImg} resizeMode="cover" />
+        ) : (
+          <View style={s.itemImgFallback}>
+            <Ionicons name="image-outline" size={20} color={Colors.muted2} />
+          </View>
+        )}
+      </View>
+      <View style={{ flex: 1, paddingRight: 4 }}>
+        <View style={[s.chipRow, { marginBottom: 6 }]}>
+          <TypeBadge type={item.item_type} size="sm" />
+          {item.skill_level && LEVEL_LABEL[(item.skill_level ?? "").toLowerCase()] ? (
+            <LevelChip level={item.skill_level} />
+          ) : null}
+        </View>
+        <Subtitle numberOfLines={2} style={{ fontSize: 15, lineHeight: 19 }}>
+          {item.title}
+        </Subtitle>
+        {compact(item.excerpt) ? (
+          <Muted numberOfLines={2} style={{ marginTop: 4, fontSize: 12.5, lineHeight: 17 }}>
+            {item.excerpt}
+          </Muted>
+        ) : null}
+        {typeof item.est_minutes === "number" && item.est_minutes > 0 ? (
+          <View style={[s.chipRow, { marginTop: 6 }]}>
+            <MinChip minutes={item.est_minutes} />
+          </View>
+        ) : null}
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={Colors.muted2} />
+    </Pressable>
+  );
+}
+
+/* Numbered step card for path views */
+function PathStepCard({ step, onPress }: { step: PathStep; onPress: () => void }) {
+  const isQuiz = step.step_type === "quiz" || (!!step.quiz && !step.item);
+  const subject = isQuiz ? step.quiz : step.item;
+  const title = step.step_title || subject?.title || "";
+  const note = compact(step.note) ?? (isQuiz ? compact(step.quiz?.description) : compact(step.item?.excerpt));
+  const img = compact(isQuiz ? null : step.item?.featured_image_url);
+
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [s.stepCard, pressed && { opacity: 0.94 }]}>
+      <View style={s.stepNumber}>
+        <Body weight="extrabold" style={s.stepNumberText}>
+          {step.step_no}
+        </Body>
+      </View>
+
+      <View style={{ flex: 1 }}>
+        <View style={[s.chipRow, { marginBottom: 6 }]}>
+          {isQuiz ? (
+            <View style={[s.typeBadge, { backgroundColor: Colors.ballDim, borderColor: Colors.ballSoft }]}>
+              <Ionicons name="help-circle-outline" size={13} color={Colors.ball} />
+              <Body weight="extrabold" style={{ color: Colors.ball, fontSize: 11, letterSpacing: 1.2, textTransform: "uppercase" }}>
+                Quiz
+              </Body>
+            </View>
+          ) : (
+            <TypeBadge type={step.item?.item_type} size="sm" />
+          )}
+          {!isQuiz && typeof step.item?.est_minutes === "number" ? <MinChip minutes={step.item?.est_minutes} /> : null}
+        </View>
+
+        <Subtitle numberOfLines={2} style={{ fontSize: 15, lineHeight: 19 }}>
+          {title}
+        </Subtitle>
+
+        {note ? (
+          <Muted numberOfLines={2} style={{ marginTop: 4, fontSize: 12.5, lineHeight: 17 }}>
+            {note}
+          </Muted>
+        ) : null}
+      </View>
+
+      {img ? (
+        <Image source={{ uri: img }} style={s.stepImg} resizeMode="cover" />
+      ) : (
+        <View style={s.stepImgFallback}>
+          <Ionicons name={isQuiz ? "help-circle-outline" : "play-circle-outline"} size={22} color={Colors.muted2} />
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+/* Filter chip used inline on topic screen */
+function FilterChip({
+  label,
+  active,
+  onPress,
+  accent,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+  accent?: string;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[
+        s.filterChip,
+        active && {
+          backgroundColor: accent ? `${accent}22` : Colors.ballDim,
+          borderColor: accent ?? Colors.ballSoft,
+        },
+      ]}
+    >
+      <Body
+        weight={active ? "extrabold" : "bold"}
+        style={[
+          s.filterChipText,
+          active && { color: accent ?? Colors.ball },
+        ]}
+      >
+        {label}
+      </Body>
+    </Pressable>
+  );
+}
+
+/* ═════════════════════════════════════════════════════════════════
+   Main ClinicTab — data layer unchanged, presentation rewritten
+   ═════════════════════════════════════════════════════════════════ */
 export default function ClinicTab() {
   const insets = useSafeAreaInsets();
 
   const [stack, setStack] = useState<ViewState[]>([{ name: "home" }]);
   const view = stack[stack.length - 1];
 
-  const push = useCallback((v: ViewState) => setStack((s) => [...s, v]), []);
-  const pop = useCallback(() => setStack((s) => (s.length > 1 ? s.slice(0, -1) : s)), []);
+  const push = useCallback((v: ViewState) => setStack((st) => [...st, v]), []);
+  const pop = useCallback(() => setStack((st) => (st.length > 1 ? st.slice(0, -1) : st)), []);
   const goHome = useCallback(() => setStack([{ name: "home" }]), []);
-
-  // Replace current view (useful for intercepting web navigation)
   const replaceView = useCallback((v: ViewState) => {
-    setStack((s) => (s.length ? [...s.slice(0, -1), v] : [v]));
+    setStack((st) => (st.length ? [...st.slice(0, -1), v] : [v]));
   }, []);
 
   const [topics, setTopics] = useState<Topic[] | null>(null);
   const [paths, setPaths] = useState<Path[] | null>(null);
   const [topicItems, setTopicItems] = useState<Record<string, Item[]>>({});
+  const [topicMeta, setTopicMeta] = useState<Record<string, Topic>>({});
   const [pathSteps, setPathSteps] = useState<Record<string, PathStep[]>>({});
+  const [pathMeta, setPathMeta] = useState<Record<string, Path>>({});
   const [itemDetail, setItemDetail] = useState<Record<string, Item>>({});
 
-  // Topic filters
+  // Topic-scope filters — kept on parent so they persist across pop/push
   const [q, setQ] = useState("");
   const [type, setType] = useState<string>("");
   const [level, setLevel] = useState<string>("");
@@ -317,28 +576,9 @@ export default function ClinicTab() {
   const [refreshing, setRefreshing] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
-
-  // WebView for lesson/quiz pages (we keep it non-scroll and size it to content)
   const webViewRef = useRef<WebView>(null);
-  const [webViewHeight, setWebViewHeight] = useState(800);
 
-  
-
-  // WebView auto-height can occasionally spike (especially around images/lightboxes in app webviews).
-  // Clamp + ignore one-off jumps to prevent huge blank space and "bottom steps" appearing far down.
-  const MIN_WEB_H = 500;
-  const MAX_WEB_H = 20000;
-
-  const applyWebHeight = useCallback((raw: number) => {
-    if (!Number.isFinite(raw)) return;
-    const next = Math.max(MIN_WEB_H, Math.min(raw, MAX_WEB_H));
-    setWebViewHeight((prev) => {
-      // Ignore sudden unrealistic spikes (transient measurements during image/layout changes)
-      if (next > prev * 1.6 && next - prev > 1200) return prev;
-      return next;
-    });
-  }, []);
-const start = useCallback(async <T,>(fn: (signal: AbortSignal) => Promise<T>) => {
+  const start = useCallback(async <T,>(fn: (signal: AbortSignal) => Promise<T>) => {
     abortRef.current?.abort();
     const ac = new AbortController();
     abortRef.current = ac;
@@ -381,6 +621,7 @@ const start = useCallback(async <T,>(fn: (signal: AbortSignal) => Promise<T>) =>
 
       if (!data.ok) throw new Error(data.error || "Failed to load topic");
       setTopicItems((m) => ({ ...m, [slug]: data.items ?? [] }));
+      if (data.topic) setTopicMeta((m) => ({ ...m, [slug]: data.topic }));
       return data.topic;
     },
     [start, q, type, level]
@@ -394,6 +635,7 @@ const start = useCallback(async <T,>(fn: (signal: AbortSignal) => Promise<T>) =>
 
       if (!data.ok) throw new Error(data.error || "Failed to load path");
       setPathSteps((m) => ({ ...m, [slug]: data.steps ?? [] }));
+      if (data.path) setPathMeta((m) => ({ ...m, [slug]: data.path }));
       return data.path;
     },
     [start]
@@ -411,6 +653,7 @@ const start = useCallback(async <T,>(fn: (signal: AbortSignal) => Promise<T>) =>
     [start]
   );
 
+  /* Initial load */
   useEffect(() => {
     (async () => {
       try {
@@ -423,7 +666,7 @@ const start = useCallback(async <T,>(fn: (signal: AbortSignal) => Promise<T>) =>
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Auto-load data when navigating deeper so users don't have to tap "Load"
+  /* Auto-load on navigation deeper */
   useEffect(() => {
     (async () => {
       try {
@@ -438,14 +681,7 @@ const start = useCallback(async <T,>(fn: (signal: AbortSignal) => Promise<T>) =>
     })();
   }, [view, topics, paths, topicItems, pathSteps, itemDetail, loadTopics, loadPaths, loadTopic, loadPath, loadItem]);
 
-  // Reset web height when switching to a new item/quiz so we don't carry over an old tall height.
-  useEffect(() => {
-    if (view.name === "item" || view.name === "quiz") {
-      setWebViewHeight(800);
-    }
-  }, [view.name, (view as any).slug]);
-
-
+  /* Refresh */
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -471,7 +707,6 @@ const start = useCallback(async <T,>(fn: (signal: AbortSignal) => Promise<T>) =>
     }
   }, [view, loadTopics, loadPaths, loadTopic, loadPath, loadItem]);
 
-  
   const onShare = useCallback(async () => {
     if (!(view.name === "item" || view.name === "quiz")) return;
 
@@ -495,48 +730,17 @@ const start = useCallback(async <T,>(fn: (signal: AbortSignal) => Promise<T>) =>
         message: `${title}\n\n${shareUrl}`,
         url: shareUrl,
       });
-    } catch (e) {
-      console.warn("Share cancelled or failed", e);
+    } catch {
+      // user cancelled — no-op
     }
   }, [view, itemDetail]);
 
-// Header: user wants only Back + Home (no title) on deeper screens.
-  const header = (
-    <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-      {stack.length > 1 ? (
-        <View style={styles.headerRow}>
-          <Pressable onPress={pop} style={({ pressed }) => [styles.headerBtn, pressed && styles.btnPressed]}>
-            <Ionicons name="chevron-back" size={18} color={stylesVars.text} />
-            <Text style={styles.headerBtnText}>Back</Text>
-          </Pressable>
-
-          <View style={{ flex: 1 }} />
-
-          {view.name === "item" || view.name === "quiz" ? (
-            <Pressable onPress={onShare} style={({ pressed }) => [styles.headerIconBtn, pressed && styles.btnPressed]}>
-              <Ionicons name="share-outline" size={18} color={stylesVars.text} />
-            </Pressable>
-          ) : null}
-
-          <Pressable onPress={goHome} style={({ pressed }) => [styles.headerIconBtn, pressed && styles.btnPressed]}>
-            <Ionicons name="home-outline" size={18} color={stylesVars.text} />
-          </Pressable>
-        </View>
-      ) : (
-        <View style={styles.headerRow}>
-          <Text style={[styles.h1, { flex: 1, textAlign: "left" }]}>Clinic</Text>
-        </View>
-      )}
-    </View>
-  );
-
-  // Shared: intercept navigation inside web pages and route to native screens.
+  /* Intercept in-page nav from WebView to native screens */
   const interceptClinicNav = useCallback(
     (url: string) => {
       try {
         const u = String(url || "");
         if (!u) return true;
-        // external links -> allow
         if (!u.includes("whatyoudink.com")) return true;
 
         if (u.includes("/clinic/paths.php")) {
@@ -586,195 +790,308 @@ const start = useCallback(async <T,>(fn: (signal: AbortSignal) => Promise<T>) =>
     [replaceView]
   );
 
-  const injectedJS = makeInjectedJS();
+  const injectedJS = useMemo(() => makeInjectedJS(), []);
 
+  /* Top bar — brand-styled. Home view shows brand title; deeper views show
+     back + (share when on item/quiz) + home.                              */
+  const TopBar = (
+    <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
+      {stack.length > 1 ? (
+        <View style={s.topBarRow}>
+          <Pressable
+            onPress={pop}
+            style={({ pressed }) => [s.topBarBtn, pressed && s.topBarBtnPressed]}
+            hitSlop={6}
+          >
+            <Ionicons name="chevron-back" size={20} color={Colors.text} />
+            <Body weight="extrabold" style={s.topBarBtnText}>
+              Back
+            </Body>
+          </Pressable>
+
+          <View style={{ flex: 1 }} />
+
+          {view.name === "item" || view.name === "quiz" ? (
+            <Pressable
+              onPress={onShare}
+              style={({ pressed }) => [s.topBarIconBtn, pressed && s.topBarBtnPressed]}
+              hitSlop={6}
+            >
+              <Ionicons name="share-outline" size={20} color={Colors.text} />
+            </Pressable>
+          ) : null}
+
+          <Pressable
+            onPress={goHome}
+            style={({ pressed }) => [s.topBarIconBtn, pressed && s.topBarBtnPressed]}
+            hitSlop={6}
+          >
+            <Ionicons name="home-outline" size={20} color={Colors.text} />
+          </Pressable>
+        </View>
+      ) : (
+        <View>
+          <Eyebrow>Pickleball clinic</Eyebrow>
+          <Title style={{ fontSize: 30, lineHeight: 34, marginTop: 4 }}>Clinic</Title>
+        </View>
+      )}
+    </View>
+  );
+
+  /* ───────── HOME ───────── */
   if (view.name === "home") {
     const topTopics = (topics ?? []).slice(0, 6);
-    const topPaths = (paths ?? []).slice(0, 4);
+    const topPaths = (paths ?? []).slice(0, 3);
 
     return (
-      <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
-        {header}
+      <SafeAreaView style={s.screen} edges={["top", "left", "right"]}>
+        {TopBar}
         <ScrollView
-          contentContainerStyle={styles.scroll}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={stylesVars.text} />}
+          contentContainerStyle={s.scroll}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={Colors.ball}
+              colors={[Colors.ball]}
+            />
+          }
+          showsVerticalScrollIndicator={false}
         >
-          <Pressable onPress={() => push({ name: "topics" })} style={({ pressed }) => [styles.bigCard, pressed && styles.cardPressed]}>
-            <View style={styles.bigCardRow}>
-              <View style={styles.bigIcon}>
-                <Ionicons name="search-outline" size={18} color={stylesVars.text} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.bigTitle}>Find a skill</Text>
-                <Text style={styles.bigSub}>Browse by topic: serve, return, dinking, drops, strategy…</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={stylesVars.textDim} style={{ opacity: 0.9 }} />
-            </View>
-          </Pressable>
+          {/* Hero */}
+          <Display size="lg" style={s.heroTitle}>
+            LEVEL UP{"\n"}YOUR GAME.
+          </Display>
+          <Muted style={s.heroSub}>
+            Guides, lessons, drills, and structured paths to take your pickleball further.
+          </Muted>
 
-          <Pressable onPress={() => push({ name: "paths" })} style={({ pressed }) => [styles.bigCard, pressed && styles.cardPressed]}>
-            <View style={styles.bigCardRow}>
-              <View style={styles.bigIcon}>
-                <Ionicons name="map-outline" size={18} color={stylesVars.text} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.bigTitle}>Training paths</Text>
-                <Text style={styles.bigSub}>Step-by-step programs that build skills in order.</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={stylesVars.textDim} style={{ opacity: 0.9 }} />
-            </View>
-          </Pressable>
-
-          <View style={styles.sectionHead}>
-            <Text style={styles.sectionTitle}>Popular topics</Text>
-            <Pressable onPress={() => push({ name: "topics" })} style={({ pressed }) => [styles.linkBtn, pressed && styles.btnPressed]}>
-              <Text style={styles.linkText}>View all</Text>
-              <Ionicons name="chevron-forward" size={16} color={stylesVars.text} />
-            </Pressable>
+          {/* Content-type tiles */}
+          <View style={s.typeGrid}>
+            {TYPE_ORDER.map((t) => (
+              <TypeTile
+                key={t}
+                type={t}
+                onPress={() => {
+                  setType(t);
+                  setQ("");
+                  setLevel("");
+                  push({ name: "topics" });
+                }}
+              />
+            ))}
           </View>
 
-          {loading && !topics ? (
-            <View style={styles.box}>
-              <ActivityIndicator color={stylesVars.text} />
-              <Text style={styles.muted}>Loading topics…</Text>
-            </View>
-          ) : topTopics.length ? (
-            <View style={styles.grid}>
-              {topTopics.map((t) => (
-                <SmallThumb
-                  key={t.id}
-                  title={t.name}
-                  subtitle={compact(t.description) ?? "Guides, lessons, and drills organized to improve this skill."}
-                  imageUrl={compact(t.featured_image_url)}
-                  onPress={() => push({ name: "topic", slug: t.slug, title: t.name })}
-                />
-              ))}
-            </View>
-          ) : (
-            <View style={styles.box}>
-              <Text style={styles.muted}>No topics yet.</Text>
-              <Pressable onPress={loadTopics} style={({ pressed }) => [styles.primaryBtn, pressed && styles.btnPressed]}>
-                <Text style={styles.primaryBtnText}>Retry</Text>
-              </Pressable>
-            </View>
-          )}
-
-          <View style={styles.sectionHead}>
-            <Text style={styles.sectionTitle}>Featured paths</Text>
-            <Pressable onPress={() => push({ name: "paths" })} style={({ pressed }) => [styles.linkBtn, pressed && styles.btnPressed]}>
-              <Text style={styles.linkText}>View all</Text>
-              <Ionicons name="chevron-forward" size={16} color={stylesVars.text} />
+          {/* Featured paths */}
+          <View style={s.sectionHead}>
+            <Eyebrow>Featured Paths</Eyebrow>
+            <Pressable
+              onPress={() => push({ name: "paths" })}
+              style={({ pressed }) => [s.seeAll, pressed && { opacity: 0.7 }]}
+              hitSlop={6}
+            >
+              <Body weight="bold" style={s.seeAllText}>
+                See all
+              </Body>
+              <Ionicons name="arrow-forward" size={14} color={Colors.muted} />
             </Pressable>
           </View>
 
           {loading && !paths ? (
-            <View style={styles.box}>
-              <ActivityIndicator color={stylesVars.text} />
-              <Text style={styles.muted}>Loading paths…</Text>
+            <View style={s.loadingBlock}>
+              <ActivityIndicator color={Colors.ball} />
+              <Muted style={{ marginTop: 10 }}>Loading paths…</Muted>
             </View>
           ) : topPaths.length ? (
-            <View style={{ gap: 10 }}>
+            <View style={{ gap: 14 }}>
               {topPaths.map((p) => (
-                <Row
+                <FeaturedPathCard
                   key={p.id}
-                  title={p.name}
-                  subtitle={compact(p.description)}
-                  meta={[
-                    compact(p.intended_level)
-                      ? LEVEL_LABEL[(p.intended_level ?? "").toLowerCase()] ?? p.intended_level
-                      : null,
-                    typeof p.est_total_minutes === "number" ? `${p.est_total_minutes} min` : null,
-                    typeof p.step_count === "number" ? `${p.step_count} steps` : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" • ")}
-                  imageUrl={compact(p.featured_image_url)}
+                  path={p}
                   onPress={() => push({ name: "path", slug: p.slug, title: p.name })}
                 />
               ))}
             </View>
           ) : (
-            <View style={styles.box}>
-              <Text style={styles.muted}>No paths yet.</Text>
-              <Pressable onPress={loadPaths} style={({ pressed }) => [styles.primaryBtn, pressed && styles.btnPressed]}>
-                <Text style={styles.primaryBtnText}>Retry</Text>
-              </Pressable>
-            </View>
+            <Pressable
+              onPress={loadPaths}
+              style={({ pressed }) => [s.emptyCard, pressed && { opacity: 0.9 }]}
+            >
+              <Body weight="extrabold">No paths yet.</Body>
+              <Muted style={{ marginTop: 6 }}>Pull to retry.</Muted>
+            </Pressable>
           )}
 
-          <View style={{ height: insets.bottom + 24 }} />
+          {/* Popular topics */}
+          <View style={s.sectionHead}>
+            <Eyebrow>Popular Topics</Eyebrow>
+            <Pressable
+              onPress={() => {
+                setType("");
+                setLevel("");
+                setQ("");
+                push({ name: "topics" });
+              }}
+              style={({ pressed }) => [s.seeAll, pressed && { opacity: 0.7 }]}
+              hitSlop={6}
+            >
+              <Body weight="bold" style={s.seeAllText}>
+                See all
+              </Body>
+              <Ionicons name="arrow-forward" size={14} color={Colors.muted} />
+            </Pressable>
+          </View>
+
+          {loading && !topics ? (
+            <View style={s.loadingBlock}>
+              <ActivityIndicator color={Colors.ball} />
+              <Muted style={{ marginTop: 10 }}>Loading topics…</Muted>
+            </View>
+          ) : topTopics.length ? (
+            <View style={s.topicGrid}>
+              {topTopics.map((t) => (
+                <TopicTile
+                  key={t.id}
+                  topic={t}
+                  onPress={() => push({ name: "topic", slug: t.slug, title: t.name })}
+                />
+              ))}
+            </View>
+          ) : (
+            <Pressable
+              onPress={loadTopics}
+              style={({ pressed }) => [s.emptyCard, pressed && { opacity: 0.9 }]}
+            >
+              <Body weight="extrabold">No topics yet.</Body>
+              <Muted style={{ marginTop: 6 }}>Pull to retry.</Muted>
+            </Pressable>
+          )}
+
+          <View style={{ height: insets.bottom + 32 }} />
         </ScrollView>
       </SafeAreaView>
     );
   }
 
+  /* ───────── ALL TOPICS ───────── */
   if (view.name === "topics") {
     return (
-      <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
-        {header}
+      <SafeAreaView style={s.screen} edges={["top", "left", "right"]}>
+        {TopBar}
+
+        {type ? (
+          <View style={s.activeFilterBanner}>
+            <Ionicons name="filter" size={14} color={Colors.ball} />
+            <Body weight="bold" style={{ color: Colors.ball, fontSize: 12.5 }}>
+              Type pre-filtered: {TYPE_LABEL[type] ?? type}
+            </Body>
+            <Pressable onPress={() => setType("")} hitSlop={8} style={{ marginLeft: "auto" }}>
+              <Body weight="bold" style={{ color: Colors.muted, fontSize: 12 }}>
+                Clear
+              </Body>
+            </Pressable>
+          </View>
+        ) : null}
+
+        <View style={s.headerSection}>
+          <Eyebrow>Browse</Eyebrow>
+          <Title style={{ fontSize: 26, lineHeight: 30, marginTop: 4 }}>All Topics</Title>
+        </View>
+
         <FlatList
           data={topics ?? []}
           keyExtractor={(t) => String(t.id)}
-          contentContainerStyle={styles.list}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={stylesVars.text} />}
+          contentContainerStyle={s.gridScroll}
+          numColumns={2}
+          columnWrapperStyle={{ gap: Spacing.md }}
+          ItemSeparatorComponent={() => <View style={{ height: Spacing.md }} />}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={Colors.ball}
+              colors={[Colors.ball]}
+            />
+          }
           ListEmptyComponent={
-            <View style={styles.box}>
-              {loading ? <ActivityIndicator color={stylesVars.text} /> : null}
-              <Text style={styles.muted}>{loading ? "Loading topics…" : "No topics found."}</Text>
+            <View style={s.emptyCard}>
+              {loading ? <ActivityIndicator color={Colors.ball} /> : null}
+              <Body weight="extrabold">
+                {loading ? "Loading topics…" : "No topics found."}
+              </Body>
               {!loading ? (
-                <Pressable onPress={loadTopics} style={({ pressed }) => [styles.primaryBtn, pressed && styles.btnPressed]}>
-                  <Text style={styles.primaryBtnText}>Retry</Text>
+                <Pressable
+                  onPress={loadTopics}
+                  style={({ pressed }) => [s.primaryBtn, pressed && { opacity: 0.85 }, { marginTop: 12 }]}
+                >
+                  <Body weight="extrabold" style={s.primaryBtnText}>
+                    Retry
+                  </Body>
                 </Pressable>
               ) : null}
             </View>
           }
           renderItem={({ item }) => (
-            <Row
-              title={item.name}
-              subtitle={compact(item.description)}
-              imageUrl={compact(item.featured_image_url)}
-              onPress={() => push({ name: "topic", slug: item.slug, title: item.name })}
-            />
+            <View style={{ flex: 1 }}>
+              <TopicTile
+                topic={item}
+                onPress={() => push({ name: "topic", slug: item.slug, title: item.name })}
+              />
+            </View>
           )}
         />
       </SafeAreaView>
     );
   }
 
+  /* ───────── ALL PATHS ───────── */
   if (view.name === "paths") {
     return (
-      <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
-        {header}
+      <SafeAreaView style={s.screen} edges={["top", "left", "right"]}>
+        {TopBar}
+
+        <View style={s.headerSection}>
+          <Eyebrow>Browse</Eyebrow>
+          <Title style={{ fontSize: 26, lineHeight: 30, marginTop: 4 }}>Training Paths</Title>
+          <Muted style={{ marginTop: 6 }}>
+            Step-by-step programs that build skills in order.
+          </Muted>
+        </View>
+
         <FlatList
           data={paths ?? []}
           keyExtractor={(p) => String(p.id)}
-          contentContainerStyle={styles.list}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={stylesVars.text} />}
+          contentContainerStyle={s.list}
+          ItemSeparatorComponent={() => <View style={{ height: Spacing.md }} />}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={Colors.ball}
+              colors={[Colors.ball]}
+            />
+          }
           ListEmptyComponent={
-            <View style={styles.box}>
-              {loading ? <ActivityIndicator color={stylesVars.text} /> : null}
-              <Text style={styles.muted}>{loading ? "Loading paths…" : "No paths found."}</Text>
+            <View style={s.emptyCard}>
+              {loading ? <ActivityIndicator color={Colors.ball} /> : null}
+              <Body weight="extrabold">
+                {loading ? "Loading paths…" : "No paths found."}
+              </Body>
               {!loading ? (
-                <Pressable onPress={loadPaths} style={({ pressed }) => [styles.primaryBtn, pressed && styles.btnPressed]}>
-                  <Text style={styles.primaryBtnText}>Retry</Text>
+                <Pressable
+                  onPress={loadPaths}
+                  style={({ pressed }) => [s.primaryBtn, pressed && { opacity: 0.85 }, { marginTop: 12 }]}
+                >
+                  <Body weight="extrabold" style={s.primaryBtnText}>
+                    Retry
+                  </Body>
                 </Pressable>
               ) : null}
             </View>
           }
           renderItem={({ item }) => (
-            <Row
-              title={item.name}
-              subtitle={compact(item.description)}
-              meta={[
-                compact(item.intended_level)
-                  ? LEVEL_LABEL[(item.intended_level ?? "").toLowerCase()] ?? item.intended_level
-                  : null,
-                typeof item.est_total_minutes === "number" ? `${item.est_total_minutes} min` : null,
-                typeof item.step_count === "number" ? `${item.step_count} steps` : null,
-              ]
-                .filter(Boolean)
-                .join(" • ")}
-              imageUrl={compact(item.featured_image_url)}
+            <FeaturedPathCard
+              path={item}
               onPress={() => push({ name: "path", slug: item.slug, title: item.name })}
             />
           )}
@@ -783,138 +1100,157 @@ const start = useCallback(async <T,>(fn: (signal: AbortSignal) => Promise<T>) =>
     );
   }
 
-  if (view.name === "filters") {
-    const slug = view.slug;
-
-    const typeOptions: { value: string; label: string }[] = [
-      { value: "", label: "Any type" },
-      { value: "guide", label: "Guide" },
-      { value: "lesson", label: "Lesson" },
-      { value: "drill", label: "Drill" },
-      { value: "troubleshoot", label: "Troubleshoot" },
-    ];
-
-    const levelOptions: { value: string; label: string }[] = [
-      { value: "", label: "Any level" },
-      { value: "beginner", label: "Beginner" },
-      { value: "intermediate", label: "Intermediate" },
-      { value: "advanced", label: "Advanced" },
-      { value: "all", label: "All levels" },
-    ];
-
-    const done = () => {
-      pop();
-      loadTopic(slug);
-    };
-
-    return (
-      <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
-        {header}
-
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={stylesVars.text} />}
-        >
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>Type</Text>
-            {typeOptions.map((opt) => (
-              <Pressable
-                key={opt.value || "__any"}
-                onPress={() => setType(opt.value)}
-                style={({ pressed }) => [styles.filterRow, pressed && styles.rowPressed]}
-              >
-                <Text style={styles.filterRowText}>{opt.label}</Text>
-                {type === opt.value ? <Ionicons name="checkmark" size={18} color={stylesVars.accent} /> : null}
-              </Pressable>
-            ))}
-          </View>
-
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>Level</Text>
-            {levelOptions.map((opt) => (
-              <Pressable
-                key={opt.value || "__any"}
-                onPress={() => setLevel(opt.value)}
-                style={({ pressed }) => [styles.filterRow, pressed && styles.rowPressed]}
-              >
-                <Text style={styles.filterRowText}>{opt.label}</Text>
-                {level === opt.value ? <Ionicons name="checkmark" size={18} color={stylesVars.accent} /> : null}
-              </Pressable>
-            ))}
-          </View>
-
-          <View style={{ flexDirection: "row", gap: 10 }}>
-            <Pressable
-              onPress={() => {
-                setType("");
-                setLevel("");
-              }}
-              style={({ pressed }) => [styles.secondaryBtn, pressed && styles.btnPressed, { flex: 1 }]}
-            >
-              <Text style={styles.secondaryBtnText}>Clear</Text>
-            </Pressable>
-
-            <Pressable onPress={done} style={({ pressed }) => [styles.primaryBtn, pressed && styles.btnPressed, { flex: 1 }]}>
-              <Text style={styles.primaryBtnText}>Done</Text>
-            </Pressable>
-          </View>
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
-
+  /* ───────── TOPIC (items with inline filter chips) ───────── */
   if (view.name === "topic") {
     const items = topicItems[view.slug];
+    const meta = topicMeta[view.slug];
+    const heroImg = compact(meta?.featured_image_url);
 
     return (
-      <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
-        {header}
-
-        <View style={styles.filters}>
-          <TextInput
-            value={q}
-            onChangeText={setQ}
-            placeholder="Search this topic…"
-            placeholderTextColor={stylesVars.textFaint}
-            style={styles.search}
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="search"
-            onSubmitEditing={() => loadTopic(view.slug)}
-          />
-
-          <Pressable
-            onPress={() => push({ name: "filters", slug: view.slug, title: "Filters" })}
-            style={({ pressed }) => [styles.filterIconBtn, pressed && styles.btnPressed]}
-          >
-            <Ionicons name="options-outline" size={18} color={stylesVars.text} />
-          </Pressable>
-        </View>
+      <SafeAreaView style={s.screen} edges={["top", "left", "right"]}>
+        {TopBar}
 
         <FlatList
           data={items ?? []}
           keyExtractor={(it) => String(it.id)}
-          contentContainerStyle={styles.list}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={stylesVars.text} />}
+          contentContainerStyle={s.list}
+          ItemSeparatorComponent={() => <View style={{ height: Spacing.md }} />}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={Colors.ball}
+              colors={[Colors.ball]}
+            />
+          }
+          ListHeaderComponent={
+            <View>
+              {heroImg ? (
+                <Image source={{ uri: heroImg }} style={s.topicHero} resizeMode="cover" />
+              ) : null}
+
+              <Eyebrow style={{ marginTop: heroImg ? Spacing.md : 0 }}>Topic</Eyebrow>
+              <Title style={{ fontSize: 28, lineHeight: 32, marginTop: 4 }}>
+                {meta?.name || view.title || "Topic"}
+              </Title>
+              {compact(meta?.description) ? (
+                <Body weight="regular" size="small" style={{ marginTop: 8, color: Colors.muted }}>
+                  {meta?.description}
+                </Body>
+              ) : null}
+
+              {/* Search */}
+              <View style={s.searchRow}>
+                <Ionicons name="search" size={16} color={Colors.muted2} style={{ marginLeft: 12 }} />
+                <TextInput
+                  value={q}
+                  onChangeText={setQ}
+                  placeholder="Search this topic…"
+                  placeholderTextColor={Colors.muted2}
+                  style={s.searchInput}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="search"
+                  onSubmitEditing={() => loadTopic(view.slug)}
+                />
+                {q ? (
+                  <Pressable
+                    onPress={() => {
+                      setQ("");
+                      loadTopic(view.slug);
+                    }}
+                    hitSlop={8}
+                    style={{ paddingHorizontal: 10 }}
+                  >
+                    <Ionicons name="close-circle" size={18} color={Colors.muted2} />
+                  </Pressable>
+                ) : null}
+              </View>
+
+              {/* Type chips */}
+              <View style={s.chipScroll}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                  <FilterChip
+                    label="All Types"
+                    active={!type}
+                    onPress={() => {
+                      setType("");
+                      loadTopic(view.slug);
+                    }}
+                  />
+                  {TYPE_ORDER.map((t) => (
+                    <FilterChip
+                      key={t}
+                      label={TYPE_META[t].label}
+                      active={type === t}
+                      accent={TYPE_META[t].color}
+                      onPress={() => {
+                        setType(type === t ? "" : t);
+                        setTimeout(() => loadTopic(view.slug), 0);
+                      }}
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* Level chips */}
+              <View style={s.chipScroll}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                  <FilterChip
+                    label="Any Level"
+                    active={!level}
+                    onPress={() => {
+                      setLevel("");
+                      loadTopic(view.slug);
+                    }}
+                  />
+                  {(["beginner", "intermediate", "advanced", "all"] as const).map((l) => (
+                    <FilterChip
+                      key={l}
+                      label={LEVEL_LABEL[l]}
+                      active={level === l}
+                      onPress={() => {
+                        setLevel(level === l ? "" : l);
+                        setTimeout(() => loadTopic(view.slug), 0);
+                      }}
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+
+              <View style={{ height: Spacing.md }} />
+            </View>
+          }
           ListEmptyComponent={
-            <View style={styles.box}>
-              {loading ? <ActivityIndicator color={stylesVars.text} /> : null}
-              <Text style={styles.muted}>
-                {loading ? "Loading lessons…" : items === undefined ? "Loading lessons…" : "No items found."}
-              </Text>
-              {!loading ? (
-                <Pressable onPress={() => loadTopic(view.slug)} style={({ pressed }) => [styles.primaryBtn, pressed && styles.btnPressed]}>
-                  <Text style={styles.primaryBtnText}>{items === undefined ? "Retry" : "Refresh"}</Text>
+            <View style={s.emptyCard}>
+              {loading ? <ActivityIndicator color={Colors.ball} /> : null}
+              <Body weight="extrabold">
+                {loading
+                  ? "Loading content…"
+                  : items === undefined
+                    ? "Loading content…"
+                    : "Nothing matches those filters."}
+              </Body>
+              {!loading && items !== undefined ? (
+                <Pressable
+                  onPress={() => {
+                    setType("");
+                    setLevel("");
+                    setQ("");
+                    loadTopic(view.slug);
+                  }}
+                  style={({ pressed }) => [s.primaryBtn, pressed && { opacity: 0.85 }, { marginTop: 12 }]}
+                >
+                  <Body weight="extrabold" style={s.primaryBtnText}>
+                    Clear filters
+                  </Body>
                 </Pressable>
               ) : null}
             </View>
           }
           renderItem={({ item }) => (
-            <Row
-              title={item.title}
-              subtitle={compact(item.excerpt)}
-              meta={pillText(item)}
-              imageUrl={compact(item.featured_image_url)}
+            <ItemCard
+              item={item}
               onPress={() => push({ name: "item", slug: item.slug, title: item.title })}
             />
           )}
@@ -923,65 +1259,119 @@ const start = useCallback(async <T,>(fn: (signal: AbortSignal) => Promise<T>) =>
     );
   }
 
+  /* ───────── PATH (hero + numbered steps) ───────── */
   if (view.name === "path") {
     const steps = pathSteps[view.slug];
+    const meta = pathMeta[view.slug];
+    const heroImg = compact(meta?.featured_image_url);
 
     return (
-      <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
-        {header}
+      <SafeAreaView style={s.screen} edges={["top", "left", "right"]}>
+        {TopBar}
+
         <FlatList
           data={steps ?? []}
-          keyExtractor={(s) => String(s.step_no)}
-          contentContainerStyle={styles.list}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={stylesVars.text} />}
+          keyExtractor={(stp) => String(stp.step_no)}
+          contentContainerStyle={s.list}
+          ItemSeparatorComponent={() => <View style={{ height: Spacing.md }} />}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={Colors.ball}
+              colors={[Colors.ball]}
+            />
+          }
+          ListHeaderComponent={
+            <View>
+              {heroImg ? (
+                <Image source={{ uri: heroImg }} style={s.pathHero} resizeMode="cover" />
+              ) : null}
+
+              <Eyebrow style={{ marginTop: heroImg ? Spacing.md : 0 }}>Training Path</Eyebrow>
+              <Title style={{ fontSize: 28, lineHeight: 32, marginTop: 4 }}>
+                {meta?.name || view.title || "Path"}
+              </Title>
+              {compact(meta?.description) ? (
+                <Body weight="regular" size="small" style={{ marginTop: 8, color: Colors.muted }}>
+                  {meta?.description}
+                </Body>
+              ) : null}
+
+              <View style={[s.chipRow, { marginTop: Spacing.md }]}>
+                <LevelChip level={meta?.intended_level} />
+                <MinChip minutes={meta?.est_total_minutes} />
+                <StepsChip count={meta?.step_count ?? steps?.length} />
+              </View>
+
+              <View style={{ height: Spacing.lg }} />
+              <Eyebrow>Steps</Eyebrow>
+              <View style={{ height: Spacing.sm }} />
+            </View>
+          }
           ListEmptyComponent={
-            <View style={styles.box}>
-              {loading ? <ActivityIndicator color={stylesVars.text} /> : null}
-              <Text style={styles.muted}>{loading ? "Loading steps…" : steps === undefined ? "Loading steps…" : "No steps."}</Text>
-              {!loading ? (
-                <Pressable onPress={() => loadPath(view.slug)} style={({ pressed }) => [styles.primaryBtn, pressed && styles.btnPressed]}>
-                  <Text style={styles.primaryBtnText}>{steps === undefined ? "Retry" : "Refresh"}</Text>
+            <View style={s.emptyCard}>
+              {loading ? <ActivityIndicator color={Colors.ball} /> : null}
+              <Body weight="extrabold">
+                {loading
+                  ? "Loading steps…"
+                  : steps === undefined
+                    ? "Loading steps…"
+                    : "No steps yet."}
+              </Body>
+              {!loading && steps !== undefined ? (
+                <Pressable
+                  onPress={() => loadPath(view.slug)}
+                  style={({ pressed }) => [s.primaryBtn, pressed && { opacity: 0.85 }, { marginTop: 12 }]}
+                >
+                  <Body weight="extrabold" style={s.primaryBtnText}>
+                    Refresh
+                  </Body>
                 </Pressable>
               ) : null}
             </View>
           }
-          renderItem={({ item }) => {
-            const isQuiz = item.step_type === "quiz" || (!!item.quiz && !item.item);
-            const title = `${item.step_no}. ${item.step_title}`;
-            const subtitle = compact(item.note) ?? compact(isQuiz ? item.quiz?.description : item.item?.excerpt);
-            const meta = isQuiz ? "QUIZ" : pillText(item.item as Item);
-            const imageUrl = compact(isQuiz ? null : item.item?.featured_image_url);
-
-            return (
-              <Row
-                title={title}
-                subtitle={subtitle}
-                meta={meta}
-                imageUrl={imageUrl}
-                onPress={() => {
-                  if (isQuiz && item.quiz) {
-                    push({ name: "quiz", slug: item.quiz.slug, title: item.step_title, pathSlug: view.slug, step: item.step_no });
-                  } else if (item.item) {
-                    push({ name: "item", slug: item.item.slug, title: item.step_title, pathSlug: view.slug, step: item.step_no });
-                  }
-                }}
-              />
-            );
-          }}
+          renderItem={({ item }) => (
+            <PathStepCard
+              step={item}
+              onPress={() => {
+                const isQuiz = item.step_type === "quiz" || (!!item.quiz && !item.item);
+                if (isQuiz && item.quiz) {
+                  push({
+                    name: "quiz",
+                    slug: item.quiz.slug,
+                    title: item.step_title,
+                    pathSlug: view.slug,
+                    step: item.step_no,
+                  });
+                } else if (item.item) {
+                  push({
+                    name: "item",
+                    slug: item.item.slug,
+                    title: item.step_title,
+                    pathSlug: view.slug,
+                    step: item.step_no,
+                  });
+                }
+              }}
+            />
+          )}
         />
       </SafeAreaView>
     );
   }
 
-
+  /* ───────── QUIZ (WebView with brand chrome) ───────── */
   if (view.name === "quiz") {
     const websiteQuizUrl =
       `https://whatyoudink.com/clinic/quiz.php?slug=${encodeURIComponent(view.slug)}&app=1` +
-      (view.pathSlug ? `&path=${encodeURIComponent(view.pathSlug)}&step=${encodeURIComponent(String(view.step ?? ""))}` : "");
+      (view.pathSlug
+        ? `&path=${encodeURIComponent(view.pathSlug)}&step=${encodeURIComponent(String(view.step ?? ""))}`
+        : "");
 
     return (
-      <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
-        {header}
+      <SafeAreaView style={s.screen} edges={["top", "left", "right"]}>
+        {TopBar}
 
         <View style={{ flex: 1 }}>
           <WebView
@@ -990,16 +1380,14 @@ const start = useCallback(async <T,>(fn: (signal: AbortSignal) => Promise<T>) =>
             originWhitelist={["*"]}
             injectedJavaScript={injectedJS}
             onShouldStartLoadWithRequest={(req) => interceptClinicNav(req.url)}
-            // IMPORTANT: allow the WebView to scroll so fixed/sticky footers behave correctly.
             scrollEnabled
-            // Prevent iOS from resizing content / messing with insets unexpectedly.
             contentInsetAdjustmentBehavior="never"
-            style={{ flex: 1, backgroundColor: "transparent" }}
+            style={{ flex: 1, backgroundColor: Colors.bg }}
             startInLoadingState
             renderLoading={() => (
-              <View style={styles.box}>
-                <ActivityIndicator color={stylesVars.text} />
-                <Text style={styles.muted}>Loading…</Text>
+              <View style={s.webLoading}>
+                <ActivityIndicator color={Colors.ball} />
+                <Muted style={{ marginTop: 10 }}>Loading quiz…</Muted>
               </View>
             )}
           />
@@ -1008,31 +1396,35 @@ const start = useCallback(async <T,>(fn: (signal: AbortSignal) => Promise<T>) =>
     );
   }
 
-
-
+  /* ───────── ITEM (WebView; fall back to a styled detail if no content_html) ───────── */
   if (view.name === "item") {
     const item = itemDetail[view.slug];
     const websiteItemUrl =
       `https://whatyoudink.com/clinic/item.php?slug=${encodeURIComponent(view.slug)}&app=1` +
-      (view.pathSlug ? `&path=${encodeURIComponent(view.pathSlug)}&step=${encodeURIComponent(String(view.step ?? ""))}` : "");
+      (view.pathSlug
+        ? `&path=${encodeURIComponent(view.pathSlug)}&step=${encodeURIComponent(String(view.step ?? ""))}`
+        : "");
 
     return (
-      <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
-        {header}
+      <SafeAreaView style={s.screen} edges={["top", "left", "right"]}>
+        {TopBar}
 
         {!item ? (
-          <View style={[styles.box, { flex: 1 }]}>
-            {loading ? <ActivityIndicator color={stylesVars.text} /> : null}
-            <Text style={styles.muted}>Loading…</Text>
+          <View style={s.webLoading}>
+            {loading ? <ActivityIndicator color={Colors.ball} /> : null}
+            <Muted style={{ marginTop: 10 }}>Loading…</Muted>
             {!loading ? (
-              <Pressable onPress={() => loadItem(view.slug)} style={({ pressed }) => [styles.primaryBtn, pressed && styles.btnPressed]}>
-                <Text style={styles.primaryBtnText}>Retry</Text>
+              <Pressable
+                onPress={() => loadItem(view.slug)}
+                style={({ pressed }) => [s.primaryBtn, pressed && { opacity: 0.85 }, { marginTop: 12 }]}
+              >
+                <Body weight="extrabold" style={s.primaryBtnText}>
+                  Retry
+                </Body>
               </Pressable>
             ) : null}
           </View>
         ) : compact(item.content_html) ? (
-          // IMPORTANT: Do NOT wrap this WebView inside a ScrollView with scrollEnabled={false}.
-          // That combination breaks position:fixed/sticky footers in WebViews and can cause content to be "cut off".
           <View style={{ flex: 1 }}>
             <WebView
               ref={webViewRef}
@@ -1043,204 +1435,500 @@ const start = useCallback(async <T,>(fn: (signal: AbortSignal) => Promise<T>) =>
               scrollEnabled
               contentInsetAdjustmentBehavior="never"
               automaticallyAdjustContentInsets={false}
-              style={{ flex: 1, backgroundColor: "transparent" }}
+              style={{ flex: 1, backgroundColor: Colors.bg }}
               startInLoadingState
               renderLoading={() => (
-                <View style={styles.box}>
-                  <ActivityIndicator color={stylesVars.text} />
-                  <Text style={styles.muted}>Loading…</Text>
+                <View style={s.webLoading}>
+                  <ActivityIndicator color={Colors.ball} />
+                  <Muted style={{ marginTop: 10 }}>Loading…</Muted>
                 </View>
               )}
             />
           </View>
         ) : (
-          <ScrollView contentContainerStyle={styles.scroll} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={stylesVars.text} />}>
-            <View style={{ gap: 12 }}>
-              {compact(item.featured_image_url) ? <Image source={{ uri: item.featured_image_url! }} style={styles.heroImg} /> : null}
+          <ScrollView
+            contentContainerStyle={s.scroll}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={Colors.ball}
+                colors={[Colors.ball]}
+              />
+            }
+          >
+            {compact(item.featured_image_url) ? (
+              <Image source={{ uri: item.featured_image_url! }} style={s.itemDetailHero} resizeMode="cover" />
+            ) : null}
 
-              <View>
-                <Text style={styles.itemTitle}>{item.title}</Text>
-                {pillText(item) ? <Text style={styles.itemMeta}>{pillText(item)}</Text> : null}
-              </View>
-
-              {compact(item.excerpt) ? <Text style={styles.itemExcerpt}>{item.excerpt}</Text> : null}
-
-              {compact(item.youtube_url) ? (
-                <Pressable onPress={() => Linking.openURL(item.youtube_url!)} style={({ pressed }) => [styles.primaryBtn, pressed && styles.btnPressed]}>
-                  <Ionicons name="logo-youtube" size={18} color={stylesVars.accentInk} />
-                  <Text style={[styles.primaryBtnText, { marginLeft: 8 }]}>Watch on YouTube</Text>
-                </Pressable>
-              ) : null}
+            <View style={[s.chipRow, { marginTop: Spacing.lg }]}>
+              <TypeBadge type={item.item_type} />
+              <LevelChip level={item.skill_level} />
+              <MinChip minutes={item.est_minutes} />
             </View>
 
-            <View style={{ height: insets.bottom + 24 }} />
+            <Title style={{ fontSize: 26, lineHeight: 30, marginTop: Spacing.md }}>
+              {item.title}
+            </Title>
+
+            {compact(item.excerpt) ? (
+              <Body
+                weight="regular"
+                style={{ marginTop: Spacing.md, color: Colors.muted, lineHeight: 22 }}
+              >
+                {item.excerpt}
+              </Body>
+            ) : null}
+
+            {compact(item.youtube_url) ? (
+              <Pressable
+                onPress={() => Linking.openURL(item.youtube_url!)}
+                style={({ pressed }) => [s.youtubeBtn, pressed && { opacity: 0.9 }]}
+              >
+                <Ionicons name="logo-youtube" size={18} color="#fff" />
+                <Body weight="extrabold" style={s.youtubeBtnText}>
+                  Watch on YouTube
+                </Body>
+              </Pressable>
+            ) : null}
+
+            <View style={{ height: insets.bottom + 32 }} />
           </ScrollView>
         )}
       </SafeAreaView>
     );
   }
 
-
   return null;
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: stylesVars.bg },
+/* ═════════════════════════════════════════════════════════════════
+   Styles
+   ═════════════════════════════════════════════════════════════════ */
+const s = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: Colors.bg },
 
-  header: { paddingHorizontal: 14, paddingBottom: 10 },
-  headerRow: {
+  /* Top bar */
+  topBar: {
+    paddingHorizontal: Spacing.screenPadH,
+    paddingBottom: Spacing.md,
+  },
+  topBarRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 10,
+    gap: 8,
   },
-  h1: { fontSize: 28, fontWeight: "900", color: stylesVars.text, letterSpacing: -0.3 },
-
-  headerBtn: {
+  topBarBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 4,
     paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    backgroundColor: stylesVars.card,
-    borderWidth: 1,
-    borderColor: stylesVars.cardBorder,
+    paddingLeft: 4,
+    paddingRight: 10,
+    borderRadius: Radius.md,
   },
-  headerIconBtn: {
-    width: 44,
-    height: 36,
-    borderRadius: 12,
+  topBarBtnText: {
+    color: Colors.text,
+    fontSize: TypeScale.bodySm,
+    letterSpacing: 0.4,
+  },
+  topBarBtnPressed: { backgroundColor: Colors.card },
+  topBarIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.pill,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: stylesVars.card,
-    borderWidth: 1,
-    borderColor: stylesVars.cardBorder,
   },
-  headerBtnText: { fontWeight: "800", color: stylesVars.text },
-  btnPressed: { opacity: 0.85 },
 
-  scroll: { paddingHorizontal: 14, paddingBottom: 10 },
-  list: { paddingHorizontal: 14, paddingBottom: 20 },
-
-  bigCard: {
-    borderRadius: 18,
-    padding: 14,
-    backgroundColor: stylesVars.card,
-    borderWidth: 1,
-    borderColor: stylesVars.cardBorder,
-    marginTop: 10,
+  /* Layout */
+  scroll: { paddingHorizontal: Spacing.screenPadH, paddingBottom: 24 },
+  list: { paddingHorizontal: Spacing.screenPadH, paddingBottom: 24 },
+  gridScroll: {
+    paddingHorizontal: Spacing.screenPadH,
+    paddingBottom: 24,
+    paddingTop: Spacing.sm,
   },
-  cardPressed: { backgroundColor: "rgba(255,255,255,0.09)" },
-  bigCardRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  bigIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
+
+  /* Home hero */
+  heroTitle: {
+    marginTop: Spacing.md,
+  },
+  heroSub: {
+    marginTop: Spacing.lg,
+    fontSize: TypeScale.body,
+    lineHeight: 22,
+    maxWidth: 320,
+  },
+
+  /* Type tiles */
+  typeGrid: {
+    marginTop: Spacing.xxl,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.md,
+  },
+  typeTile: {
+    flexBasis: "47%",
+    flexGrow: 1,
+    padding: Spacing.lg,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    backgroundColor: Colors.card,
+  },
+  typeTileIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.md,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(199,255,46,0.12)",
+    borderWidth: 1,
+    marginBottom: Spacing.md,
   },
-  bigTitle: { fontSize: 15, fontWeight: "900", color: stylesVars.text },
-  bigSub: { marginTop: 3, color: stylesVars.textDim, fontSize: 13, lineHeight: 17 },
+  typeTileTitle: {
+    fontSize: 18,
+    lineHeight: 22,
+  },
+  typeTileDesc: {
+    marginTop: 4,
+    fontSize: 12.5,
+    lineHeight: 17,
+  },
 
-  sectionHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 14, marginBottom: 8 },
-  sectionTitle: { fontSize: 14, fontWeight: "900", opacity: 0.95, color: stylesVars.text },
-  linkBtn: {
+  /* Section headers */
+  sectionHead: {
+    marginTop: Spacing.xxxl,
+    marginBottom: Spacing.lg,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+  },
+  seeAll: { flexDirection: "row", alignItems: "center", gap: 6 },
+  seeAllText: {
+    color: Colors.muted,
+    fontSize: TypeScale.caption,
+    letterSpacing: 1.4,
+    textTransform: "uppercase",
+  },
+
+  /* Featured path card */
+  pathCard: {
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
+    overflow: "hidden",
+  },
+  pathThumb: {
+    width: "100%",
+    aspectRatio: 16 / 9,
+    backgroundColor: Colors.surface,
+    position: "relative",
+  },
+  pathImg: { width: "100%", height: "100%" },
+  pathImgFallback: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.surface,
+  },
+  pathBadge: {
+    position: "absolute",
+    top: 12,
+    left: 12,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 5,
     paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: stylesVars.card,
-    borderWidth: 1,
-    borderColor: stylesVars.cardBorder,
+    paddingVertical: 4,
+    borderRadius: Radius.pill,
+    backgroundColor: Colors.ball,
   },
-  linkText: { fontWeight: "900", color: stylesVars.text },
+  pathBadgeText: {
+    color: Colors.onBall,
+    fontSize: TypeScale.caption,
+    letterSpacing: 0.6,
+  },
+  pathBody: {
+    padding: Spacing.lg,
+  },
 
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  thumb: { width: "48%", borderRadius: 18, overflow: "hidden", backgroundColor: stylesVars.card, borderWidth: 1, borderColor: stylesVars.cardBorder },
-  thumbImgWrap: { width: "100%", aspectRatio: 16 / 10, backgroundColor: "rgba(255,255,255,0.04)" },
-  thumbImg: { width: "100%", height: "100%" },
-  thumbImgFallback: { width: "100%", height: "100%", backgroundColor: "rgba(255,255,255,0.05)" },
-  thumbBody: { padding: 10 },
-  thumbTitle: { color: stylesVars.text, fontWeight: "900", fontSize: 13 },
-  thumbSub: { marginTop: 4, color: stylesVars.textDim, fontSize: 12, lineHeight: 16 },
+  /* Topic grid (home + topics list) */
+  topicGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.md,
+  },
+  topicTile: {
+    flexBasis: "47%",
+    flexGrow: 1,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: "hidden",
+    backgroundColor: Colors.card,
+  },
+  topicTileImgWrap: {
+    width: "100%",
+    aspectRatio: 4 / 5,
+    position: "relative",
+  },
+  topicTileImg: { width: "100%", height: "100%" },
+  topicTileFallback: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.surface,
+  },
+  topicTileScrim: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: "60%",
+    backgroundColor: "rgba(8,8,8,0.65)",
+  },
+  topicTileTitleWrap: {
+    position: "absolute",
+    left: 12,
+    right: 12,
+    bottom: 12,
+  },
 
-  row: {
+  /* Section heading inside list-header */
+  headerSection: {
+    paddingHorizontal: Spacing.screenPadH,
+    paddingTop: Spacing.sm,
+    paddingBottom: Spacing.md,
+  },
+
+  /* Topic & path hero images */
+  topicHero: {
+    width: "100%",
+    aspectRatio: 16 / 9,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.surface,
+  },
+  pathHero: {
+    width: "100%",
+    aspectRatio: 16 / 9,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.surface,
+  },
+
+  /* Search */
+  searchRow: {
+    marginTop: Spacing.lg,
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
+    borderRadius: Radius.md,
+    minHeight: 44,
+  },
+  searchInput: {
+    flex: 1,
+    color: Colors.text,
+    fontFamily: Fonts.body.medium,
+    fontSize: TypeScale.bodySm,
+    paddingHorizontal: 8,
+    paddingVertical: 10,
+  },
+
+  /* Filter chip rows */
+  chipScroll: { marginTop: Spacing.md },
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  filterChip: {
+    paddingVertical: 7,
+    paddingHorizontal: 13,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
+  },
+  filterChipText: {
+    color: Colors.muted,
+    fontSize: TypeScale.caption,
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+  },
+
+  /* Type badge */
+  typeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    alignSelf: "flex-start",
+  },
+
+  /* Meta chip (level/min/steps) */
+  metaChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: "rgba(255,255,255,0.04)",
+  },
+  metaChipText: {
+    color: Colors.muted,
+    fontSize: 11,
+    letterSpacing: 0.8,
+  },
+
+  /* Item card */
+  itemCard: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
     padding: 12,
-    borderRadius: 16,
-    backgroundColor: stylesVars.card,
+    borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: stylesVars.cardBorder,
-    marginBottom: 10,
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
   },
-  rowPressed: { backgroundColor: "rgba(255,255,255,0.09)" },
-  rowImgWrap: { width: 56, height: 42, borderRadius: 12, overflow: "hidden", backgroundColor: "rgba(255,255,255,0.04)" },
-  rowImg: { width: "100%", height: "100%" },
-  rowImgFallback: { width: "100%", height: "100%", backgroundColor: "rgba(255,255,255,0.05)" },
-  rowTitle: { color: stylesVars.text, fontWeight: "900", fontSize: 14 },
-  rowSub: { marginTop: 3, color: stylesVars.textDim, fontSize: 12, lineHeight: 16 },
-  rowMeta: { marginTop: 6, color: stylesVars.textFaint, fontSize: 12 },
-
-  filters: { flexDirection: "row", gap: 10, paddingHorizontal: 14, paddingBottom: 10 },
-  search: {
-    flex: 1,
-    backgroundColor: stylesVars.card,
-    borderWidth: 1,
-    borderColor: stylesVars.cardBorder,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: stylesVars.text,
-  },
-  filterIconBtn: {
-    width: 44,
-    borderRadius: 14,
+  itemImgWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: Radius.md,
+    overflow: "hidden",
+    backgroundColor: Colors.surface,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: stylesVars.card,
-    borderWidth: 1,
-    borderColor: stylesVars.cardBorder,
   },
+  itemImg: { width: "100%", height: "100%" },
+  itemImgFallback: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center" },
 
-  box: { padding: 16, borderRadius: 18, backgroundColor: stylesVars.card, borderWidth: 1, borderColor: stylesVars.cardBorder, alignItems: "center", gap: 10, marginTop: 10 },
-  muted: { color: stylesVars.textDim },
-
-  primaryBtn: {
+  /* Path step card */
+  stepCard: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    backgroundColor: stylesVars.accent,
-  },
-  primaryBtnText: { fontWeight: "900", color: stylesVars.accentInk },
-
-  secondaryBtn: {
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    backgroundColor: stylesVars.card,
+    gap: 12,
+    padding: 12,
+    borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: stylesVars.cardBorder,
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
+  },
+  stepNumber: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.pill,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.ballDim,
+    borderWidth: 1,
+    borderColor: Colors.ballSoft,
+  },
+  stepNumberText: {
+    color: Colors.ball,
+    fontSize: 14,
+    fontFamily: Fonts.body.extrabold,
+  },
+  stepImg: {
+    width: 56,
+    height: 56,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surface,
+  },
+  stepImgFallback: {
+    width: 56,
+    height: 56,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surface,
     alignItems: "center",
     justifyContent: "center",
   },
-  secondaryBtnText: { fontWeight: "900", color: stylesVars.text },
 
-  filterSection: { marginTop: 10, marginBottom: 10, borderRadius: 18, overflow: "hidden", borderWidth: 1, borderColor: stylesVars.cardBorder, backgroundColor: stylesVars.card },
-  filterSectionTitle: { padding: 12, fontWeight: "900", color: stylesVars.text, borderBottomWidth: 1, borderBottomColor: stylesVars.cardBorder },
-  filterRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: stylesVars.cardBorder },
-  filterRowText: { color: stylesVars.text, fontWeight: "800" },
+  /* Loading / empty */
+  loadingBlock: { paddingVertical: 24, alignItems: "center" },
+  emptyCard: {
+    padding: Spacing.xl,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
+    alignItems: "center",
+  },
 
-  heroImg: { width: "100%", aspectRatio: 16 / 10, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.04)" },
-  itemTitle: { color: stylesVars.text, fontWeight: "900", fontSize: 20 },
-  itemMeta: { marginTop: 6, color: stylesVars.textDim, fontSize: 13 },
-  itemExcerpt: { color: stylesVars.textDim, fontSize: 14, lineHeight: 20 },
+  /* Active filter banner */
+  activeFilterBanner: {
+    marginHorizontal: Spacing.screenPadH,
+    marginBottom: Spacing.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.ballDim,
+    borderWidth: 1,
+    borderColor: Colors.ballSoft,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  /* Buttons */
+  primaryBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: Radius.pill,
+    backgroundColor: Colors.ball,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.18)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  primaryBtnText: {
+    color: Colors.onBall,
+    fontSize: TypeScale.caption,
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+  },
+
+  youtubeBtn: {
+    marginTop: Spacing.lg,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: Radius.pill,
+    backgroundColor: Colors.youtube,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  youtubeBtnText: {
+    color: "#fff",
+    fontSize: TypeScale.bodySm,
+    letterSpacing: 1.0,
+    textTransform: "uppercase",
+  },
+
+  /* Web fallback loading */
+  webLoading: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: Spacing.xl,
+  },
+
+  /* Fallback item detail (when content_html missing) */
+  itemDetailHero: {
+    width: "100%",
+    aspectRatio: 16 / 9,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.surface,
+    marginTop: Spacing.md,
+  },
 });
