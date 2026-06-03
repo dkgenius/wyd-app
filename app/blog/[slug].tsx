@@ -1,18 +1,31 @@
 import React, { useMemo, useRef, useState, useCallback } from "react";
-import { View, Text, Pressable, StyleSheet, Platform, Share } from "react-native";
+import { View, Pressable, StyleSheet, Platform, Share } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { WebView } from "react-native-webview";
 import * as WebBrowser from "expo-web-browser";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { Body, Muted } from "@/components/ui";
+import { Colors, Fonts, Radius, Spacing, TypeScale } from "@/constants/theme";
+
+/**
+ * Blog post detail screen — loads the public post page inside a WebView.
+ *
+ * The article body, "Published / Updated" date line, and hero treatment all
+ * come from /post.php on the website, so any visual change there propagates
+ * here automatically. This screen owns only the surrounding chrome:
+ *   - Top bar with back + title + share + open-in-browser
+ *   - Safe area handling for status bar
+ *   - Bottom padding injection so content doesn't sit under the device chrome
+ */
 export default function BlogPostWebScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { slug } = useLocalSearchParams<{ slug?: string }>();
   const webRef = useRef<WebView>(null);
   const [canGoBack, setCanGoBack] = useState(false);
-  const [articleTitle, setArticleTitle] = useState("Article");
+  const [articleTitle, setArticleTitle] = useState("Review");
 
   const safeSlug = useMemo(
     () => (typeof slug === "string" ? slug : ""),
@@ -45,7 +58,7 @@ export default function BlogPostWebScreen() {
               var t =
                 document.querySelector('meta[property="og:title"]')?.content ||
                 document.title ||
-                'Article';
+                'Review';
               window.ReactNativeWebView &&
                 window.ReactNativeWebView.postMessage(
                   JSON.stringify({ type: 'title', title: t })
@@ -90,28 +103,31 @@ export default function BlogPostWebScreen() {
         url: shareUrl,
       });
     } catch (e) {
-      console.warn("Share cancelled or failed", e);
+      // user cancelled — no-op
     }
   }, [articleTitle, shareUrl]);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={[styles.topBar, { paddingTop: insets.top }]}>
-        <Pressable onPress={handleBack} style={styles.iconBtn}>
-          <Ionicons name="chevron-back" size={24} color="#fff" />
+        <Pressable onPress={handleBack} style={({ pressed }) => [styles.iconBtn, pressed && styles.iconBtnPressed]} hitSlop={8}>
+          <Ionicons name="chevron-back" size={22} color={Colors.text} />
         </Pressable>
 
-        <Text style={styles.title} numberOfLines={1}>
-          {articleTitle}
-        </Text>
+        <View style={styles.titleWrap}>
+          <Muted style={styles.eyebrow}>Court Review</Muted>
+          <Body weight="extrabold" numberOfLines={1} style={styles.title}>
+            {articleTitle}
+          </Body>
+        </View>
 
         <View style={styles.rightActions}>
-          <Pressable onPress={onShare} style={styles.iconBtn}>
-            <Ionicons name="share-outline" size={22} color="#fff" />
+          <Pressable onPress={onShare} style={({ pressed }) => [styles.iconBtn, pressed && styles.iconBtnPressed]} hitSlop={8}>
+            <Ionicons name="share-outline" size={20} color={Colors.text} />
           </Pressable>
 
-          <Pressable onPress={openInBrowser} style={styles.iconBtn}>
-            <Ionicons name="open-outline" size={22} color="#fff" />
+          <Pressable onPress={openInBrowser} style={({ pressed }) => [styles.iconBtn, pressed && styles.iconBtnPressed]} hitSlop={8}>
+            <Ionicons name="open-outline" size={20} color={Colors.text} />
           </Pressable>
         </View>
       </View>
@@ -139,33 +155,55 @@ export default function BlogPostWebScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#0b0f14" },
+  safe: { flex: 1, backgroundColor: Colors.bg },
+
   topBar: {
     flexDirection: "row",
-    alignItems: "flex-end",
+    alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 10,
-    paddingBottom: 8,
-    backgroundColor: "#0b0f14",
+    paddingHorizontal: 8,
+    paddingBottom: Spacing.sm,
+    gap: Spacing.sm,
+    backgroundColor: Colors.bg,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(255,255,255,0.12)",
+    borderBottomColor: Colors.border,
   },
+
   iconBtn: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     alignItems: "center",
     justifyContent: "center",
+    borderRadius: Radius.pill,
   },
-  rightActions: {
-    flexDirection: "row",
+  iconBtnPressed: {
+    backgroundColor: Colors.card,
+  },
+
+  titleWrap: {
+    flex: 1,
+    alignItems: "center",
+    paddingHorizontal: 4,
+  },
+  eyebrow: {
+    color: Colors.ball,
+    fontSize: 9.5,
+    letterSpacing: 2.2,
+    textTransform: "uppercase",
+    fontFamily: Fonts.body.bold,
+    marginBottom: 1,
   },
   title: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-    flex: 1,
+    color: Colors.text,
+    fontSize: TypeScale.bodySm,
+    fontFamily: Fonts.body.extrabold,
     textAlign: "center",
-    marginHorizontal: 8,
   },
-  web: { flex: 1, backgroundColor: "transparent" },
+
+  rightActions: {
+    flexDirection: "row",
+    gap: 2,
+  },
+
+  web: { flex: 1, backgroundColor: Colors.bg },
 });

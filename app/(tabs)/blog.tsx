@@ -9,7 +9,6 @@ import {
   Pressable,
   RefreshControl,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from "react-native";
@@ -17,6 +16,9 @@ import * as Location from "expo-location";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+import { Body, Eyebrow, Muted, Title } from "@/components/ui";
+import { Colors, Fonts, Radius, Spacing, TypeScale } from "@/constants/theme";
 
 const API_BASE = "https://whatyoudink.com";
 const PER_PAGE = 20;
@@ -76,23 +78,6 @@ function slugFromBlogUrl(url?: string | null) {
   if (!url) return null;
   const m = url.match(/\/blog\/([^/?#]+)/i);
   return m ? m[1] : null;
-}
-
-function RatingBalls({ value }: { value: number | null }) {
-  if (value === null) return <Text style={styles.muted}>—</Text>;
-  const v = clamp(Number(value), 0, 10);
-  const full = Math.floor(v);
-  const half = v - full >= 0.5;
-  return (
-    <View style={styles.ballsRow}>
-      {Array.from({ length: 10 }).map((_, idx) => {
-        const i = idx + 1;
-        const on = i <= full;
-        const isHalf = i === full + 1 && half;
-        return <View key={i} style={[styles.ball, on && styles.ballOn, isHalf && styles.ballHalf]} />;
-      })}
-    </View>
-  );
 }
 
 export default function BlogTab() {
@@ -223,7 +208,7 @@ export default function BlogTab() {
       await fetchPosts(true);
       if (sort === "nearby") await applySort("nearby");
     } catch (e: any) {
-      Alert.alert("Blog", e?.message || "Refresh failed");
+      Alert.alert("Reviews", e?.message || "Refresh failed");
     } finally {
       setRefreshing(false);
     }
@@ -242,7 +227,7 @@ export default function BlogTab() {
       .then(() => setLoading(false))
       .catch((e: any) => {
         setLoading(false);
-        Alert.alert("Blog", e?.message || "Failed to load posts");
+        Alert.alert("Reviews", e?.message || "Failed to load posts");
       });
   }, [fetchPosts]);
 
@@ -250,96 +235,149 @@ export default function BlogTab() {
     return () => abortRef.current?.abort();
   }, []);
 
+  /* ───────── Card ───────── */
   const renderItem = useCallback(({ item }: { item: PostItem }) => {
     const dateLabel = fmtDate(item.published_at);
     const loc = item.location ?? null;
-
-    const locLine =
-      loc?.name
-        ? `${loc.name}${loc.city || loc.state ? ` (${loc.city ?? ""}${loc.city && loc.state ? ", " : ""}${loc.state ?? ""})` : ""}`
-        : "";
-
-    const rating = typeof loc?.rating_overall === "number" ? loc.rating_overall : null;
+    const cityState = loc
+      ? [loc.city, loc.state].filter(Boolean).join(", ")
+      : "";
+    const rating =
+      typeof loc?.rating_overall === "number" ? loc.rating_overall.toFixed(1) : null;
 
     return (
       <Pressable
         onPress={() => router.push({ pathname: "/blog/[slug]", params: { slug: item.slug } })}
         style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
       >
-        <Pressable
-          onPress={(e) => {
-            // Prevent opening the article when tapping Share
-            // @ts-ignore
-            e?.stopPropagation?.();
-            const url = `${API_BASE}/blog/${item.slug}`;
-            Share.share({ title: item.title, message: `${item.title}\n\n${url}`, url }).catch(() => {});
-          }}
-          style={styles.shareBtn}
-          hitSlop={10}
-        >
-          <Ionicons name="share-outline" size={18} color="#fff" />
-        </Pressable>
-
-        {!!item.featured_image_url && (
-          <View style={styles.thumb}>
-            <Image source={{ uri: item.featured_image_url }} style={styles.thumbImg} resizeMode="cover" />
-          </View>
-        )}
-
-        <View style={styles.metaRow}>
-          {!!dateLabel && <Text style={styles.metaText}>{dateLabel}</Text>}
-          {!!locLine && <Text style={styles.metaText}>• {locLine}</Text>}
-
-          {rating !== null && (
-            <View style={styles.ratingPill}>
-              <RatingBalls value={rating} />
-              <Text style={styles.ratingNum}>{rating.toFixed(1)}/10</Text>
+        {/* Featured image with rating + share overlay */}
+        <View style={styles.thumb}>
+          {item.featured_image_url ? (
+            <Image
+              source={{ uri: item.featured_image_url }}
+              style={styles.thumbImg}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={styles.thumbFallback}>
+              <Ionicons name="image-outline" size={36} color={Colors.muted2} />
             </View>
           )}
+
+          {rating ? (
+            <View style={styles.ratingPill}>
+              <Ionicons name="star" size={12} color={Colors.onBall} />
+              <Body weight="extrabold" style={styles.ratingNum}>
+                {rating}
+              </Body>
+            </View>
+          ) : null}
+
+          <Pressable
+            onPress={(e: any) => {
+              e?.stopPropagation?.();
+              const url = `${API_BASE}/blog/${item.slug}`;
+              Share.share({
+                title: item.title,
+                message: `${item.title}\n\n${url}`,
+                url,
+              }).catch(() => {});
+            }}
+            style={({ pressed }) => [styles.shareBtn, pressed && { opacity: 0.7 }]}
+            hitSlop={10}
+          >
+            <Ionicons name="share-outline" size={16} color="#fff" />
+          </Pressable>
         </View>
 
-        <Text style={styles.h2} numberOfLines={2}>{item.title}</Text>
-        {!!item.excerpt && <Text style={styles.excerpt} numberOfLines={3}>{item.excerpt}</Text>}
+        {/* Body */}
+        <View style={styles.cardBody}>
+          {(cityState || dateLabel) ? (
+            <Eyebrow numberOfLines={1} style={{ marginBottom: 6 }}>
+              {[cityState, dateLabel].filter(Boolean).join(" · ")}
+            </Eyebrow>
+          ) : null}
+
+          <Title numberOfLines={2} style={styles.cardTitle}>
+            {item.title}
+          </Title>
+
+          {!!loc?.name && (
+            <Muted numberOfLines={1} style={{ marginTop: 4 }}>
+              {loc.name}
+            </Muted>
+          )}
+
+          {!!item.excerpt && (
+            <Body
+              weight="regular"
+              size="small"
+              numberOfLines={3}
+              style={styles.excerpt}
+            >
+              {item.excerpt}
+            </Body>
+          )}
+        </View>
       </Pressable>
     );
   }, []);
 
+  /* ───────── Header (search + sort) ───────── */
   const Header = useMemo(() => {
     return (
       <View style={styles.headerWrap}>
-        <Text style={styles.h1}>Articles</Text>
+        <Eyebrow>Pickleball court reviews</Eyebrow>
+        <Title style={styles.h1}>Reviews</Title>
 
         <View style={styles.searchRow}>
-          <TextInput
-            value={inputQ}
-            onChangeText={setInputQ}
-            placeholder="Search courts, cities, gear, etc…"
-            placeholderTextColor="rgba(255,255,255,0.45)"
-            style={styles.searchInput}
-            returnKeyType="search"
-            onSubmitEditing={onSubmitSearch}
-            autoCapitalize="none"
-            autoCorrect={false}
-            clearButtonMode="while-editing"
-          />
-          <Pressable onPress={onSubmitSearch} style={({ pressed }) => [styles.btn, pressed && styles.btnPressed]}>
-            <Text style={styles.btnText}>Search</Text>
+          <View style={styles.searchBox}>
+            <Ionicons name="search" size={16} color={Colors.muted2} />
+            <TextInput
+              value={inputQ}
+              onChangeText={setInputQ}
+              placeholder="Search courts, cities…"
+              placeholderTextColor={Colors.muted2}
+              style={styles.searchInput}
+              returnKeyType="search"
+              onSubmitEditing={onSubmitSearch}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+          <Pressable
+            onPress={onSubmitSearch}
+            style={({ pressed }) => [styles.searchBtn, pressed && { opacity: 0.85 }]}
+          >
+            <Body weight="extrabold" style={styles.searchBtnText}>
+              Search
+            </Body>
           </Pressable>
         </View>
 
         <View style={styles.sortRow}>
           <Pressable
             onPress={() => applySort("recent")}
-            style={({ pressed }) => [styles.pill, sort === "recent" && styles.pillOn, pressed && styles.pillPressed]}
+            style={[styles.sortPill, sort === "recent" && styles.sortPillOn]}
           >
-            <Text style={[styles.pillText, sort === "recent" && styles.pillTextOn]}>Most recent</Text>
+            <Body
+              weight="bold"
+              style={[styles.sortPillText, sort === "recent" && styles.sortPillTextOn]}
+            >
+              Most recent
+            </Body>
           </Pressable>
 
           <Pressable
             onPress={() => applySort("nearby")}
-            style={({ pressed }) => [styles.pill, sort === "nearby" && styles.pillOn, pressed && styles.pillPressed]}
+            style={[styles.sortPill, sort === "nearby" && styles.sortPillOn]}
           >
-            <Text style={[styles.pillText, sort === "nearby" && styles.pillTextOn]}>Nearby</Text>
+            <Body
+              weight="bold"
+              style={[styles.sortPillText, sort === "nearby" && styles.sortPillTextOn]}
+            >
+              Nearby
+            </Body>
           </Pressable>
 
           {sort === "nearby" && (
@@ -351,13 +389,14 @@ export default function BlogTab() {
                     setRadius(r);
                     applySort("nearby", r).catch(() => {});
                   }}
-                  style={({ pressed }) => [
-                    styles.radiusPill,
-                    radius === r && styles.radiusPillOn,
-                    pressed && styles.pillPressed,
-                  ]}
+                  style={[styles.radiusPill, radius === r && styles.radiusPillOn]}
                 >
-                  <Text style={[styles.radiusText, radius === r && styles.radiusTextOn]}>{r} mi</Text>
+                  <Body
+                    weight="extrabold"
+                    style={[styles.radiusText, radius === r && styles.radiusTextOn]}
+                  >
+                    {r}mi
+                  </Body>
                 </Pressable>
               ))}
             </View>
@@ -369,12 +408,12 @@ export default function BlogTab() {
 
   if (loading && visible.length === 0) {
     return (
-      <View style={styles.screen}>
+      <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
         <View style={styles.center}>
-          <ActivityIndicator />
-          <Text style={[styles.muted, { marginTop: 10 }]}>Loading posts…</Text>
+          <ActivityIndicator color={Colors.ball} />
+          <Muted style={{ marginTop: 10 }}>Loading reviews…</Muted>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
@@ -386,30 +425,44 @@ export default function BlogTab() {
         renderItem={renderItem}
         ListHeaderComponent={Header}
         contentContainerStyle={styles.listContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={Colors.ball}
+            colors={[Colors.ball]}
+          />
+        }
         onEndReachedThreshold={0.6}
         onEndReached={onLoadMore}
         ListEmptyComponent={
           !loading ? (
-            <View style={[styles.card, { padding: 14, marginTop: 12 }]}>
-              <Text style={styles.emptyTitle}>No posts found.</Text>
-              <Text style={styles.muted}>Try a different search.</Text>
+            <View style={styles.empty}>
+              <Body weight="extrabold" style={{ color: Colors.text }}>
+                No reviews found.
+              </Body>
+              <Muted style={{ marginTop: 6 }}>Try a different search.</Muted>
             </View>
           ) : null
         }
         ListFooterComponent={
-          <View style={{ paddingVertical: 14 }}>
+          <View style={{ paddingVertical: Spacing.lg }}>
             {loadingMore ? (
               <View style={styles.footerRow}>
-                <ActivityIndicator />
-                <Text style={[styles.muted, { marginLeft: 10 }]}>Loading more…</Text>
+                <ActivityIndicator color={Colors.ball} />
+                <Muted style={{ marginLeft: 10 }}>Loading more…</Muted>
               </View>
             ) : hasMore ? (
-              <Pressable onPress={onLoadMore} style={({ pressed }) => [styles.loadMore, pressed && styles.btnPressed]}>
-                <Text style={styles.btnText}>Load more</Text>
+              <Pressable
+                onPress={onLoadMore}
+                style={({ pressed }) => [styles.loadMore, pressed && { opacity: 0.85 }]}
+              >
+                <Body weight="extrabold" style={styles.loadMoreText}>
+                  Load more
+                </Body>
               </Pressable>
             ) : visible.length > 0 ? (
-              <Text style={[styles.muted, { textAlign: "center" }]}>You’re all caught up.</Text>
+              <Muted style={{ textAlign: "center" }}>You're all caught up.</Muted>
             ) : null}
           </View>
         }
@@ -419,146 +472,186 @@ export default function BlogTab() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#0b0f14" },
-  listContent: { padding: 14, paddingBottom: 28 },
+  screen: { flex: 1, backgroundColor: Colors.bg },
+  listContent: { paddingHorizontal: Spacing.screenPadH, paddingBottom: 32 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
 
-  headerWrap: { paddingBottom: 8 },
-  h1: { fontSize: 28, fontWeight: "800", color: "rgba(255,255,255,0.92)", letterSpacing: -0.3 },
-  sub: { marginTop: 4, fontSize: 14, color: "rgba(255,255,255,0.60)" },
-
-  searchRow: { flexDirection: "row", gap: 10, marginTop: 14, alignItems: "center" },
-  searchInput: {
-    flex: 1,
-    minHeight: 44,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    color: "rgba(255,255,255,0.92)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(255,255,255,0.05)",
+  /* Header */
+  headerWrap: { paddingTop: Spacing.sm, paddingBottom: Spacing.xl },
+  h1: {
+    marginTop: 4,
+    fontSize: 32,
+    lineHeight: 36,
   },
-  btn: {
-    height: 44,
+
+  /* Search */
+  searchRow: { flexDirection: "row", gap: 10, marginTop: Spacing.xl, alignItems: "center" },
+  searchBox: {
+    flex: 1,
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center",
+    minHeight: 44,
     paddingHorizontal: 14,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
-    backgroundColor: "rgba(255,255,255,0.08)",
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
+  },
+  searchInput: {
+    flex: 1,
+    color: Colors.text,
+    fontFamily: Fonts.body.medium,
+    fontSize: TypeScale.bodySm,
+  },
+  searchBtn: {
+    minHeight: 44,
+    paddingHorizontal: 18,
+    borderRadius: 14,
+    backgroundColor: Colors.ball,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.18)",
     alignItems: "center",
     justifyContent: "center",
   },
-  btnPressed: { transform: [{ scale: 0.98 }], opacity: 0.95 },
-  btnText: { color: "rgba(255,255,255,0.90)", fontWeight: "800" },
-
-  sortRow: { flexDirection: "row", gap: 10, marginTop: 10, alignItems: "center", flexWrap: "wrap" },
-  pill: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
-    backgroundColor: "rgba(255,255,255,0.06)",
+  searchBtnText: {
+    color: Colors.onBall,
+    fontSize: TypeScale.bodySm,
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
   },
-  pillOn: { backgroundColor: "rgba(255,255,255,0.12)", borderColor: "rgba(255,255,255,0.22)" },
-  pillPressed: { opacity: 0.92 },
-  pillText: { color: "rgba(255,255,255,0.70)", fontWeight: "700" },
-  pillTextOn: { color: "rgba(255,255,255,0.92)" },
 
-  radiusRow: { flexDirection: "row", gap: 8, marginLeft: 2 },
+  /* Sort row */
+  sortRow: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
+  sortPill: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
+  },
+  sortPillOn: {
+    backgroundColor: Colors.ballDim,
+    borderColor: Colors.ballSoft,
+  },
+  sortPillText: {
+    color: Colors.muted,
+    fontSize: TypeScale.caption,
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+  },
+  sortPillTextOn: { color: Colors.ball },
+
+  radiusRow: { flexDirection: "row", gap: 6 },
   radiusPill: {
     paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 999,
+    paddingHorizontal: 11,
+    borderRadius: Radius.pill,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(255,255,255,0.05)",
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
   },
-  radiusPillOn: { backgroundColor: "rgba(255,255,255,0.12)", borderColor: "rgba(255,255,255,0.22)" },
-  radiusText: { color: "rgba(255,255,255,0.65)", fontWeight: "800", fontSize: 12 },
-  radiusTextOn: { color: "rgba(255,255,255,0.92)" },
+  radiusPillOn: { backgroundColor: Colors.ballDim, borderColor: Colors.ballSoft },
+  radiusText: {
+    color: Colors.muted,
+    fontSize: 11,
+    letterSpacing: 0.8,
+  },
+  radiusTextOn: { color: Colors.ball },
 
+  /* Card */
   card: {
-    position: "relative",
-
-    borderRadius: 18,
+    marginTop: Spacing.md,
+    borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.04)",
-    padding: 14,
-    marginTop: 12,
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
+    overflow: "hidden",
   },
-  cardPressed: { transform: [{ translateY: -1 }], backgroundColor: "rgba(255,255,255,0.06)", borderColor: "rgba(255,255,255,0.16)" },
+  cardPressed: { backgroundColor: "rgba(235,235,235,0.06)" },
+
+  thumb: {
+    width: "100%",
+    aspectRatio: 16 / 9,
+    backgroundColor: Colors.surface,
+    position: "relative",
+  },
+  thumbImg: { width: "100%", height: "100%" },
+  thumbFallback: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  ratingPill: {
+    position: "absolute",
+    top: 12,
+    left: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: Radius.pill,
+    backgroundColor: Colors.ball,
+  },
+  ratingNum: {
+    color: Colors.onBall,
+    fontSize: TypeScale.caption,
+    letterSpacing: 0.4,
+  },
 
   shareBtn: {
     position: "absolute",
     top: 12,
     right: 12,
-    width: 34,
-    height: 34,
-    borderRadius: 999,
+    width: 32,
+    height: 32,
+    borderRadius: Radius.pill,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(0,0,0,0.35)",
+    backgroundColor: "rgba(0,0,0,0.55)",
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(255,255,255,0.18)",
-    zIndex: 5,
   },
 
-  thumb: {
-    width: "100%",
-    height: 140,
-    borderRadius: 14,
-    overflow: "hidden",
+  cardBody: { padding: Spacing.lg },
+  cardTitle: {
+    fontSize: 20,
+    lineHeight: 24,
+  },
+  excerpt: { marginTop: Spacing.md, color: Colors.muted, lineHeight: 19 },
+
+  /* Footer / empty */
+  empty: {
+    padding: Spacing.lg,
+    marginTop: Spacing.lg,
+    borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.04)",
-    marginBottom: 10,
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
   },
-  thumbImg: { width: "100%", height: "100%" },
-
-  metaRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 10, marginTop: 2 },
-  metaText: { fontSize: 13, color: "rgba(255,255,255,0.60)" },
-
-  h2: { marginTop: 8, marginBottom: 6, fontSize: 18, fontWeight: "800", color: "rgba(255,255,255,0.92)", letterSpacing: -0.2, lineHeight: 22 },
-  excerpt: { color: "rgba(255,255,255,0.62)", fontSize: 14, lineHeight: 19 },
-
-  ratingPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(255,255,255,0.05)",
-  },
-  ratingNum: { fontWeight: "900", fontSize: 12, color: "rgba(255,255,255,0.90)" },
-
-  ballsRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-  ball: {
-    width: 8,
-    height: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.22)",
-    backgroundColor: "rgba(255,255,255,0.06)",
-  },
-  ballOn: { backgroundColor: "rgba(184,255,0,0.95)", borderColor: "rgba(0,0,0,0.25)" },
-  ballHalf: { backgroundColor: "rgba(184,255,0,0.55)", borderColor: "rgba(0,0,0,0.25)" },
-
-  muted: { color: "rgba(255,255,255,0.60)" },
-  emptyTitle: { color: "rgba(255,255,255,0.92)", fontWeight: "800" },
-
   footerRow: { flexDirection: "row", alignItems: "center", justifyContent: "center" },
   loadMore: {
     alignSelf: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 999,
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    borderRadius: Radius.pill,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: Colors.borderUp,
+    backgroundColor: "rgba(235,235,235,0.06)",
+  },
+  loadMoreText: {
+    color: Colors.text,
+    fontSize: TypeScale.bodySm,
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
   },
 });
