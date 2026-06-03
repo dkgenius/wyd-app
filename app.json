@@ -3,7 +3,7 @@
     "name": "What You Dink",
     "slug": "what-you-dink",
     "scheme": "whatyoudink",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "automatic",
@@ -14,6 +14,7 @@
     },
     "android": {
       "package": "com.whatyoudink.app",
+      "versionCode": 2,
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyBsc1F6_BI4BUmtkpWJoTnWSi_s1XHvvTw"
