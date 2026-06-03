@@ -12,6 +12,19 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import OnboardingModal from "../src/components/OnboardingModal";
 
+// Brand fonts — mirrors the public site (Bebas Neue display + DM Sans body).
+import {
+  useFonts as useBebasFonts,
+  BebasNeue_400Regular,
+} from "@expo-google-fonts/bebas-neue";
+import {
+  DMSans_400Regular,
+  DMSans_500Medium,
+  DMSans_600SemiBold,
+  DMSans_700Bold,
+  DMSans_800ExtraBold,
+} from "@expo-google-fonts/dm-sans";
+
 /**
  * Makes the user's first location available app-wide.
  * (Optional) Any screen can read it via useContext(InitialLocationContext).
@@ -39,6 +52,16 @@ export default function RootLayout() {
 
   // First-run onboarding flag (stored as "1" after completion)
   const [showOnboarding, setShowOnboarding] = useState(false);
+
+  // Load brand fonts before render. The hook merges all font maps; render is blocked below.
+  const [fontsLoaded, fontError] = useBebasFonts({
+    BebasNeue_400Regular,
+    DMSans_400Regular,
+    DMSans_500Medium,
+    DMSans_600SemiBold,
+    DMSans_700Bold,
+    DMSans_800ExtraBold,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -82,8 +105,9 @@ export default function RootLayout() {
     };
   }, []);
 
-  // While the splash is visible, render nothing.
-  if (!ready) return null;
+  // While the splash is visible or fonts are mid-load, render nothing.
+  // (We still continue if fontError fires — fall back to system fonts rather than block the app.)
+  if (!ready || (!fontsLoaded && !fontError)) return null;
 
   return (
     <SafeAreaProvider>

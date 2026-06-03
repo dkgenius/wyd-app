@@ -1,12 +1,14 @@
 import { Tabs } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { View } from "react-native";
 
-const BG = "#0b0f14";
-const ACTIVE = "rgba(255,255,255,0.95)";
-const INACTIVE = "rgba(255,255,255,0.55)";
-const BORDER = "rgba(255,255,255,0.12)";
+import { Colors, Fonts } from "@/constants/theme";
 
+/**
+ * Bottom tabs — brand-matched to the public site.
+ * Background = near-black, ball-green active indicator + label, DM Sans Bold.
+ */
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
 
@@ -17,21 +19,24 @@ export default function TabsLayout() {
         tabBarHideOnKeyboard: true,
 
         tabBarStyle: {
-          backgroundColor: BG,
-          borderTopColor: BORDER,
+          backgroundColor: Colors.bg,
+          borderTopColor: Colors.border,
           borderTopWidth: 1,
 
-          height: 60 + insets.bottom,
+          height: 64 + insets.bottom,
           paddingBottom: Math.max(insets.bottom, 10),
-          paddingTop: 8,
+          paddingTop: 10,
         },
 
-        tabBarActiveTintColor: ACTIVE,
-        tabBarInactiveTintColor: INACTIVE,
+        tabBarActiveTintColor: Colors.ball,
+        tabBarInactiveTintColor: Colors.muted2,
 
         tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: "600",
+          fontFamily: Fonts.body.bold,
+          fontSize: 10.5,
+          letterSpacing: 1.2,
+          textTransform: "uppercase",
+          marginTop: 2,
         },
       }}
     >
@@ -40,8 +45,10 @@ export default function TabsLayout() {
         options={{
           title: "Home",
           tabBarLabel: "Home",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" size={size} color={color} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <View style={focused ? activeIconWrap : undefined}>
+              <Ionicons name={focused ? "home" : "home-outline"} size={size} color={color} />
+            </View>
           ),
         }}
       />
@@ -49,10 +56,16 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="map"
         options={{
-          title: "Map",
-          tabBarLabel: "Map",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="map-outline" size={size} color={color} />
+          title: "Courts",
+          tabBarLabel: "Courts",
+          tabBarIcon: ({ color, size, focused }) => (
+            <View style={focused ? activeIconWrap : undefined}>
+              <Ionicons
+                name={focused ? "location" : "location-outline"}
+                size={size}
+                color={color}
+              />
+            </View>
           ),
         }}
       />
@@ -60,10 +73,16 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="blog"
         options={{
-          title: "Articles",
-          tabBarLabel: "Articles",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="newspaper-outline" size={size} color={color} />
+          title: "Reviews",
+          tabBarLabel: "Reviews",
+          tabBarIcon: ({ color, size, focused }) => (
+            <View style={focused ? activeIconWrap : undefined}>
+              <Ionicons
+                name={focused ? "newspaper" : "newspaper-outline"}
+                size={size}
+                color={color}
+              />
+            </View>
           ),
         }}
       />
@@ -73,8 +92,14 @@ export default function TabsLayout() {
         options={{
           title: "Clinic",
           tabBarLabel: "Clinic",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="fitness-outline" size={size} color={color} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <View style={focused ? activeIconWrap : undefined}>
+              <Ionicons
+                name={focused ? "fitness" : "fitness-outline"}
+                size={size}
+                color={color}
+              />
+            </View>
           ),
         }}
       />
@@ -84,11 +109,26 @@ export default function TabsLayout() {
         options={{
           title: "About",
           tabBarLabel: "About",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="information-circle-outline" size={size} color={color} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <View style={focused ? activeIconWrap : undefined}>
+              <Ionicons
+                name={focused ? "information-circle" : "information-circle-outline"}
+                size={size}
+                color={color}
+              />
+            </View>
           ),
         }}
       />
     </Tabs>
   );
 }
+
+const activeIconWrap = {
+  // Subtle ball-green wash under the active icon, matching the site's
+  // active-link treatment in the admin sidebar.
+  backgroundColor: Colors.ballDim,
+  paddingHorizontal: 14,
+  paddingVertical: 4,
+  borderRadius: 999,
+};
