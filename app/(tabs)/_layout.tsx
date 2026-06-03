@@ -1,13 +1,17 @@
 import { Tabs } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { View } from "react-native";
 
 import { Colors, Fonts } from "@/constants/theme";
 
 /**
  * Bottom tabs — brand-matched to the public site.
- * Background = near-black, ball-green active indicator + label, DM Sans Bold.
+ *
+ * Design choices:
+ *  - Same icon style (outlined) for active + inactive so there's no jarring
+ *    icon swap on tap. Active state communicated through color only.
+ *  - Ball-green tint on the focused tab (icon + label), muted gray otherwise.
+ *  - No filled-vs-outlined toggling, no pill background — keeps the bar quiet.
  */
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
@@ -23,7 +27,7 @@ export default function TabsLayout() {
           borderTopColor: Colors.border,
           borderTopWidth: 1,
 
-          height: 64 + insets.bottom,
+          height: 62 + insets.bottom,
           paddingBottom: Math.max(insets.bottom, 10),
           paddingTop: 10,
         },
@@ -45,10 +49,8 @@ export default function TabsLayout() {
         options={{
           title: "Home",
           tabBarLabel: "Home",
-          tabBarIcon: ({ color, size, focused }) => (
-            <View style={focused ? activeIconWrap : undefined}>
-              <Ionicons name={focused ? "home" : "home-outline"} size={size} color={color} />
-            </View>
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="home-outline" size={size} color={color} />
           ),
         }}
       />
@@ -58,14 +60,8 @@ export default function TabsLayout() {
         options={{
           title: "Courts",
           tabBarLabel: "Courts",
-          tabBarIcon: ({ color, size, focused }) => (
-            <View style={focused ? activeIconWrap : undefined}>
-              <Ionicons
-                name={focused ? "location" : "location-outline"}
-                size={size}
-                color={color}
-              />
-            </View>
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="location-outline" size={size} color={color} />
           ),
         }}
       />
@@ -75,14 +71,8 @@ export default function TabsLayout() {
         options={{
           title: "Reviews",
           tabBarLabel: "Reviews",
-          tabBarIcon: ({ color, size, focused }) => (
-            <View style={focused ? activeIconWrap : undefined}>
-              <Ionicons
-                name={focused ? "newspaper" : "newspaper-outline"}
-                size={size}
-                color={color}
-              />
-            </View>
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="newspaper-outline" size={size} color={color} />
           ),
         }}
       />
@@ -92,14 +82,8 @@ export default function TabsLayout() {
         options={{
           title: "Clinic",
           tabBarLabel: "Clinic",
-          tabBarIcon: ({ color, size, focused }) => (
-            <View style={focused ? activeIconWrap : undefined}>
-              <Ionicons
-                name={focused ? "fitness" : "fitness-outline"}
-                size={size}
-                color={color}
-              />
-            </View>
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="fitness-outline" size={size} color={color} />
           ),
         }}
       />
@@ -109,26 +93,11 @@ export default function TabsLayout() {
         options={{
           title: "About",
           tabBarLabel: "About",
-          tabBarIcon: ({ color, size, focused }) => (
-            <View style={focused ? activeIconWrap : undefined}>
-              <Ionicons
-                name={focused ? "information-circle" : "information-circle-outline"}
-                size={size}
-                color={color}
-              />
-            </View>
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="information-circle-outline" size={size} color={color} />
           ),
         }}
       />
     </Tabs>
   );
 }
-
-const activeIconWrap = {
-  // Subtle ball-green wash under the active icon, matching the site's
-  // active-link treatment in the admin sidebar.
-  backgroundColor: Colors.ballDim,
-  paddingHorizontal: 14,
-  paddingVertical: 4,
-  borderRadius: 999,
-};

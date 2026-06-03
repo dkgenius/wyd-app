@@ -2,19 +2,28 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
-  Text,
   StyleSheet,
-  ScrollView,
   Pressable,
   ActivityIndicator,
   Image,
-  RefreshControl,
   Linking,
 } from "react-native";
 import * as Location from "expo-location";
 import { router } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+
+import {
+  Screen,
+  Display,
+  Title,
+  Body,
+  Muted,
+  Eyebrow,
+  Button,
+  Card,
+  Section,
+} from "@/components/ui";
+import { Colors, Fonts, Radius, Spacing, TypeScale } from "@/constants/theme";
 
 const API_BASE = "https://whatyoudink.com";
 
@@ -40,13 +49,6 @@ type ApiPost = {
   excerpt?: string | null;
   featured_image_url?: string | null;
   published_at?: string | null;
-  location?: {
-    id?: number | null;
-    name?: string | null;
-    city?: string | null;
-    state?: string | null;
-    rating_overall?: number | null;
-  };
 };
 
 function slugFromBlogUrl(url?: string | null): string | null {
@@ -60,65 +62,136 @@ function fmtRating(r?: number | null) {
   return r.toFixed(1);
 }
 
-function Logo() {
+/* ───────── Header: logo + socials ───────── */
+function BrandHeader() {
   return (
-    <View style={styles.logoWrap}>
-      <Image source={require("../../assets/images/whatyoudinklogo-outline.png")} style={styles.logo} />
+    <View style={styles.brandRow}>
+      <Image
+        source={require("../../assets/images/whatyoudinklogo-outline.png")}
+        style={styles.brandLogo}
+        resizeMode="contain"
+      />
 
       <View style={styles.socials}>
-        <Pressable
-          onPress={() => Linking.openURL("https://www.instagram.com/whatyoudink")}
-          style={({ pressed }) => [styles.socialIcon, pressed && styles.pressedIcon]}
-          accessibilityRole="link"
-          accessibilityLabel="Instagram"
-        >
-          <Ionicons name="logo-instagram" size={22} color="rgba(255,255,255,0.92)" />
-        </Pressable>
-
-        <Pressable
-          onPress={() => Linking.openURL("https://www.youtube.com/@whatyoudink")}
-          style={({ pressed }) => [styles.socialIcon, pressed && styles.pressedIcon]}
-          accessibilityRole="link"
-          accessibilityLabel="YouTube"
-        >
-          <Ionicons name="logo-youtube" size={24} color="rgba(255,255,255,0.92)" />
-        </Pressable>
-
-        <Pressable
-          onPress={() => Linking.openURL("https://www.tiktok.com/@whatyoudink")}
-          style={({ pressed }) => [styles.socialIcon, pressed && styles.pressedIcon]}
-          accessibilityRole="link"
-          accessibilityLabel="TikTok"
-        >
-          <Ionicons name="logo-tiktok" size={22} color="rgba(255,255,255,0.92)" />
-        </Pressable>
+        {[
+          { icon: "logo-instagram" as const, url: "https://www.instagram.com/whatyoudink" },
+          { icon: "logo-youtube" as const, url: "https://www.youtube.com/@whatyoudink" },
+          { icon: "logo-tiktok" as const, url: "https://www.tiktok.com/@whatyoudink" },
+        ].map((s) => (
+          <Pressable
+            key={s.icon}
+            onPress={() => Linking.openURL(s.url)}
+            hitSlop={8}
+            style={({ pressed }) => [styles.socialIcon, pressed && { opacity: 0.6 }]}
+          >
+            <Ionicons name={s.icon} size={20} color={Colors.muted} />
+          </Pressable>
+        ))}
       </View>
     </View>
   );
 }
 
+/* ───────── Hero ───────── */
+function Hero() {
+  return (
+    <View style={styles.hero}>
+      <Eyebrow style={{ marginBottom: 12 }}>Pickleball court reviews</Eyebrow>
 
+      <Display size="xl" style={styles.heroTitle}>
+        FIND COURTS{"\n"}WORTH YOUR TIME.
+      </Display>
 
+      <Muted style={styles.heroSub}>
+        Real reviews. Honest ratings. Video walkthroughs.
+      </Muted>
 
-function QuickAction({
-  label,
+      <View style={styles.heroCtas}>
+        <Button onPress={() => router.push("/map")}>
+          Find Courts Near Me
+        </Button>
+      </View>
+    </View>
+  );
+}
+
+/* ───────── Nearby review card ───────── */
+function NearbyReviewCard({
+  loc,
+  post,
+  onPress,
+}: {
+  loc: ApiNearbyLocation;
+  post?: ApiPost;
+  onPress: () => void;
+}) {
+  const rating = fmtRating(loc.rating_overall);
+  const imageUrl = post?.featured_image_url || null;
+  const cityState = [loc.city, loc.state].filter(Boolean).join(", ");
+
+  return (
+    <Card pressable onPress={onPress} style={styles.reviewCard}>
+      <View style={styles.reviewImageWrap}>
+        {imageUrl ? (
+          <Image source={{ uri: imageUrl }} style={styles.reviewImage} resizeMode="cover" />
+        ) : (
+          <View style={styles.reviewImageFallback}>
+            <Ionicons name="image-outline" size={36} color={Colors.muted2} />
+          </View>
+        )}
+
+        {rating ? (
+          <View style={styles.ratingPill}>
+            <Ionicons name="star" size={12} color={Colors.onBall} />
+            <Body weight="extrabold" style={styles.ratingText}>
+              {rating}
+            </Body>
+          </View>
+        ) : null}
+      </View>
+
+      <View style={styles.reviewBody}>
+        <Eyebrow numberOfLines={1}>{cityState || "Court Review"}</Eyebrow>
+        <Title numberOfLines={2} style={styles.reviewTitle}>
+          {loc.blog?.title || post?.title || loc.name}
+        </Title>
+        <Muted numberOfLines={1} style={{ marginTop: 4 }}>
+          {loc.name}
+        </Muted>
+      </View>
+    </Card>
+  );
+}
+
+/* ───────── Quick link card (Clinic / Reviews / About) ───────── */
+function QuickLinkCard({
+  title,
+  description,
   icon,
   onPress,
 }: {
-  label: string;
+  title: string;
+  description: string;
   icon: keyof typeof Ionicons.glyphMap;
   onPress: () => void;
 }) {
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.qa, pressed && styles.pressed]}>
-      <View style={styles.qaIcon}>
-        <Ionicons name={icon} size={22} color="rgba(255,255,255,0.92)" />
+    <Card pressable onPress={onPress} style={styles.quickCard}>
+      <View style={styles.quickIconWrap}>
+        <Ionicons name={icon} size={22} color={Colors.ball} />
       </View>
-      <Text style={styles.qaLabel}>{label}</Text>
-    </Pressable>
+      <View style={{ flex: 1 }}>
+        <Title style={styles.quickTitle}>{title}</Title>
+        <Muted numberOfLines={2} style={{ marginTop: 4 }}>
+          {description}
+        </Muted>
+      </View>
+      <Ionicons name="arrow-forward" size={18} color={Colors.muted2} />
+    </Card>
   );
 }
 
+/* ───────── Screen ───────── */
 export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -155,7 +228,6 @@ export default function HomeScreen() {
       const lat = loc.coords.latitude;
       const lng = loc.coords.longitude;
 
-      // 1) Fetch nearby locations (includes blog slug/title + rating_overall)
       const nearbyUrl =
         `${API_BASE}/api/v1/locations/nearby.php` +
         `?lat=${encodeURIComponent(lat)}` +
@@ -176,8 +248,6 @@ export default function HomeScreen() {
       const locs: ApiNearbyLocation[] = json.locations || [];
       setNearby(locs);
 
-      // 2) Fetch recent posts so we can show featured images for nearby review cards
-      // (We map slug -> featured_image_url, title, etc.)
       const postsRes = await fetch(`${API_BASE}/api/v1/posts.php?limit=100`);
       const postsJson = await postsRes.json();
 
@@ -213,160 +283,195 @@ export default function HomeScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        keyboardShouldPersistTaps="handled"
+    <Screen scroll refreshing={refreshing} onRefresh={onRefresh} paddingBottom={48}>
+      <BrandHeader />
+      <Hero />
+
+      {/* Nearby Reviews */}
+      <Section
+        title="Nearby Reviews"
+        onSeeAll={() => router.push("/blog")}
+        seeAllLabel="See all"
       >
-        <Logo />
-
-        <View style={styles.qaRow}>
-          <QuickAction label="Map" icon="map-outline" onPress={() => router.push("/map")} />
-          <QuickAction label="Clinic" icon="fitness-outline" onPress={() => router.push("/clinic")} />
-          <QuickAction label="Articles" icon="newspaper-outline" onPress={() => router.push("/blog")} />
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.sectionHead}>
-            <Text style={styles.sectionTitle}>Nearby Reviews</Text>
+        {loading ? (
+          <View style={styles.loadingBlock}>
+            <ActivityIndicator color={Colors.ball} />
+            <Muted style={{ marginTop: 10 }}>Loading nearby courts…</Muted>
           </View>
-
-          {loading ? (
-            <View style={{ paddingVertical: 18, alignItems: "center" }}>
-              <ActivityIndicator />
-              <Text style={[styles.muted, { marginTop: 10 }]}>Loading…</Text>
-            </View>
-          ) : error ? (
-            <Text style={[styles.muted, { marginTop: 8 }]}>{error}</Text>
-          ) : reviewedNearby.length === 0 ? (
-            <Text style={[styles.muted, { marginTop: 8 }]}>No reviewed courts found nearby.</Text>
-          ) : (
-            reviewedNearby.slice(0, 8).map((loc) => {
-              const slug = loc.blog?.slug || slugFromBlogUrl(loc.blog?.url);
+        ) : error ? (
+          <Card style={styles.errorCard}>
+            <Body weight="semibold">{error}</Body>
+            <Muted style={{ marginTop: 4 }}>
+              Pull down to retry, or open Courts to browse the map.
+            </Muted>
+          </Card>
+        ) : reviewedNearby.length === 0 ? (
+          <Card style={styles.errorCard}>
+            <Body weight="semibold">No reviewed courts found nearby.</Body>
+            <Muted style={{ marginTop: 4 }}>
+              Try the Courts tab to expand your search radius.
+            </Muted>
+          </Card>
+        ) : (
+          <View style={{ gap: 14 }}>
+            {reviewedNearby.slice(0, 4).map((loc) => {
+              const slug = loc.blog?.slug || slugFromBlogUrl(loc.blog?.url) || "";
               const post = slug ? postsBySlug[slug] : undefined;
-              const imageUrl = post?.featured_image_url || null;
-              const rating = fmtRating(loc.rating_overall);
-
               return (
-                <Pressable key={loc.id} style={({ pressed }) => [styles.reviewCard, pressed && styles.pressed]} onPress={() => openBlogInApp(loc)}>
-                  <View style={styles.reviewImageWrap}>
-                    {imageUrl ? (
-                      <Image source={{ uri: imageUrl }} style={styles.reviewImage} />
-                    ) : (
-                      <View style={styles.reviewImageFallback} />
-                    )}
-
-                    {rating ? (
-                      <View style={styles.ratingPill}>
-                        <Ionicons name="star" size={14} color="#0b0f14" />
-                        <Text style={styles.ratingText}>{rating}</Text>
-                      </View>
-                    ) : null}
-                  </View>
-
-                  <View style={styles.reviewBody}>
-                    <Text style={styles.reviewTitle} numberOfLines={2}>
-                      {loc.blog?.title || post?.title || loc.name}
-                    </Text>
-                    <Text style={styles.reviewMeta} numberOfLines={1}>
-                      {loc.name} • {loc.city}, {loc.state}
-                    </Text>
-                  </View>
-                </Pressable>
+                <NearbyReviewCard
+                  key={loc.id}
+                  loc={loc}
+                  post={post}
+                  onPress={() => openBlogInApp(loc)}
+                />
               );
-            })
-          )}
-        </View>
+            })}
+          </View>
+        )}
+      </Section>
 
-        <View style={{ height: 16 }} />
-      </ScrollView>
-    </SafeAreaView>
+      {/* Quick links */}
+      <Section title="Explore">
+        <View style={{ gap: 12 }}>
+          <QuickLinkCard
+            icon="fitness-outline"
+            title="The Clinic"
+            description="Drills, lessons, and learning paths from beginner to advanced."
+            onPress={() => router.push("/clinic")}
+          />
+          <QuickLinkCard
+            icon="newspaper-outline"
+            title="All Reviews"
+            description="Every court we've visited. Honest ratings, no sponsorships."
+            onPress={() => router.push("/blog")}
+          />
+          <QuickLinkCard
+            icon="information-circle-outline"
+            title="About WhatYouDink"
+            description="Who we are and why this exists."
+            onPress={() => router.push("/videos")}
+          />
+        </View>
+      </Section>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#0b0f14" },
-  container: { flex: 1, backgroundColor: "#0b0f14" },
-  content: { padding: 16, paddingBottom: 24 },
-
-  logoWrap: {
+  /* Brand header */
+  brandRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingTop: 6,
-    paddingBottom: 10,
+    paddingTop: Spacing.sm,
+    paddingBottom: Spacing.xl,
   },
-  logo: { width: 64, height: 64, borderRadius: 16 },
-
-  socials: { flexDirection: "row", alignItems: "center" },
-  socialIcon: { marginLeft: 14, padding: 6 },
-  pressedIcon: { opacity: 0.7 },
-
-  qaRow: {
+  brandLogo: {
+    width: 64,
+    height: 64,
+  },
+  socials: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 10,
-    marginTop: 8,
-    marginBottom: 10,
-  },
-  qa: {
-    flex: 1,
-    borderRadius: 18,
-    paddingVertical: 12,
-    paddingHorizontal: 10,
     alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.06)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
+    gap: Spacing.lg,
   },
-  qaIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 16,
+  socialIcon: { padding: 4 },
+
+  /* Hero */
+  hero: {
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.xl,
+  },
+  heroTitle: {
+    marginTop: 0,
+  },
+  heroSub: {
+    marginTop: Spacing.lg,
+    fontSize: TypeScale.body,
+    lineHeight: 24,
+    maxWidth: 320,
+  },
+  heroCtas: {
+    marginTop: Spacing.xl,
+    flexDirection: "row",
+    gap: Spacing.md,
+    flexWrap: "wrap",
+  },
+
+  /* Loading / error */
+  loadingBlock: {
+    paddingVertical: 28,
     alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(199,255,46,0.10)",
-    marginBottom: 8,
   },
-  qaLabel: { color: "rgba(255,255,255,0.92)", fontWeight: "900" },
+  errorCard: {
+    padding: Spacing.lg,
+  },
 
-  pressed: { opacity: 0.88 },
-
-  section: { marginTop: 6 },
-  sectionHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  sectionTitle: { fontSize: 16, fontWeight: "900", color: "rgba(255,255,255,0.92)" },
-  muted: { color: "rgba(255,255,255,0.55)", fontWeight: "700" },
-
+  /* Nearby review card */
   reviewCard: {
-    marginTop: 12,
-    borderRadius: 18,
     overflow: "hidden",
-    backgroundColor: "rgba(255,255,255,0.06)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
   },
-  reviewImageWrap: { width: "100%", aspectRatio: 16 / 9, backgroundColor: "rgba(255,255,255,0.04)" },
-  reviewImage: { width: "100%", height: "100%" },
-  reviewImageFallback: { flex: 1, backgroundColor: "rgba(255,255,255,0.05)" },
-
+  reviewImageWrap: {
+    width: "100%",
+    aspectRatio: 16 / 9,
+    backgroundColor: Colors.surface,
+  },
+  reviewImage: {
+    width: "100%",
+    height: "100%",
+  },
+  reviewImageFallback: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.surface,
+  },
   ratingPill: {
     position: "absolute",
-    top: 10,
-    left: 10,
+    top: 12,
+    left: 12,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 4,
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: "#c7ff2e",
+    paddingVertical: 4,
+    borderRadius: Radius.pill,
+    backgroundColor: Colors.ball,
   },
-  ratingText: { fontWeight: "900", color: "#0b0f14" },
+  ratingText: {
+    fontFamily: Fonts.body.extrabold,
+    color: Colors.onBall,
+    fontSize: TypeScale.caption,
+    letterSpacing: 0.5,
+  },
+  reviewBody: {
+    padding: Spacing.lg,
+  },
+  reviewTitle: {
+    marginTop: 6,
+    fontSize: 20,
+    lineHeight: 26,
+  },
 
-  reviewBody: { padding: 12 },
-  reviewTitle: { color: "rgba(255,255,255,0.92)", fontSize: 14, fontWeight: "900" },
-  reviewMeta: { marginTop: 6, color: "rgba(255,255,255,0.65)", fontWeight: "800", fontSize: 12 },
+  /* Quick link card */
+  quickCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.lg,
+    padding: Spacing.lg,
+  },
+  quickIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.ballDim,
+    borderWidth: 1,
+    borderColor: Colors.ballSoft,
+  },
+  quickTitle: {
+    fontSize: 16,
+    lineHeight: 20,
+  },
 });
