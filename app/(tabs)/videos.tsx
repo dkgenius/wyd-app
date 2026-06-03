@@ -19,7 +19,6 @@ import { useRouter } from "expo-router";
 import Animated, {
   Extrapolation,
   FadeIn,
-  FadeInUp,
   interpolate,
   measure,
   SharedValue,
@@ -369,112 +368,14 @@ export default function AboutTab() {
             />
           </Animated.View>
 
-          {/* ═════ Connect cards (the priority) ═════ */}
-          <Animated.View
-            entering={FadeInUp.duration(500).delay(120)}
-            style={{ marginTop: Spacing.xxl }}
-          >
-            <Eyebrow>Connect</Eyebrow>
-          </Animated.View>
-
-          {/* YouTube card — first */}
-          <Animated.View
-            entering={FadeInUp.duration(500).delay(180)}
-            style={s.ytCard}
-          >
-            <View style={s.ytCardHead}>
-              <View
-                style={[
-                  s.ytIconWrap,
-                  { backgroundColor: "rgba(255,0,0,0.16)", borderColor: "rgba(255,0,0,0.45)" },
-                ]}
-              >
-                <Ionicons name="logo-youtube" size={22} color={Colors.youtube} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Body weight="extrabold" style={{ color: Colors.text, fontSize: 16 }}>
-                  YouTube
-                  <Body weight="bold" style={s.socialHandle}>
-                    {"  "}
-                    {CHANNEL_HANDLE}
-                  </Body>
-                </Body>
-                <Muted style={s.socialDescription}>
-                  Court reviews and breakdowns
-                </Muted>
-              </View>
-            </View>
-
-            <View style={{ flexDirection: "row", gap: 10, marginTop: Spacing.md }}>
-              <Pressable
-                onPress={onOpenYouTube}
-                style={({ pressed }) => [s.ytBtnGhost, pressed && { opacity: 0.85 }]}
-              >
-                <Body weight="extrabold" style={s.ytBtnGhostText}>
-                  Open Channel
-                </Body>
-              </Pressable>
-              <Pressable
-                onPress={onSubscribe}
-                style={({ pressed }) => [s.ytBtnPrimary, pressed && { opacity: 0.9 }]}
-              >
-                <Ionicons name="add" size={16} color="#fff" />
-                <Body weight="extrabold" style={s.ytBtnPrimaryText}>
-                  Subscribe
-                </Body>
-              </Pressable>
-            </View>
-          </Animated.View>
-
-          {/* Instagram + TikTok */}
-          <Animated.View
-            entering={FadeInUp.duration(500).delay(240)}
-            style={{ marginTop: Spacing.md }}
-          >
-            <SocialButton
-              icon={<FontAwesome name="instagram" size={20} color="#e1306c" />}
-              label="Instagram"
-              handle={`@${USERNAME}`}
-              description="Highlights and quick tips"
-              color="#e1306c"
-              onPress={onInstagramPress}
-            />
-          </Animated.View>
-
-          <Animated.View
-            entering={FadeInUp.duration(500).delay(290)}
-            style={{ marginTop: Spacing.md }}
-          >
-            <SocialButton
-              icon={<Ionicons name="logo-tiktok" size={20} color={Colors.text} />}
-              label="TikTok"
-              handle={`@${USERNAME}`}
-              description="Shorts and behind-the-scenes"
-              color="#9da3a8"
-              onPress={onTikTokPress}
-            />
-          </Animated.View>
-
-          <Animated.View
-            entering={FadeInUp.duration(500).delay(340)}
-            style={{ marginTop: Spacing.md }}
-          >
-            <Muted style={s.socialHint}>
-              We copy the handle to your clipboard automatically — paste if the app opens Home
-              instead of the profile.
-            </Muted>
-          </Animated.View>
-
-          {/* ═════ Story divider ═════ */}
-          <View style={s.divider} />
-
+          {/* ═════ The Backstory — story first, with scroll reveals ═════ */}
           <Reveal>
-            <View style={s.sectionLabel}>
+            <View style={[s.sectionLabel, { marginTop: Spacing.xxl }]}>
               <Muted style={s.sectionLabelText}>The Backstory</Muted>
             </View>
           </Reveal>
 
-          {/* ═════ Story Hero ═════ */}
+          {/* Story Hero */}
           <Reveal>
             <View style={s.storyEyebrowRow}>
               <Eyebrow>Behind the channel</Eyebrow>
@@ -499,7 +400,7 @@ export default function AboutTab() {
             </Body>
           </Reveal>
 
-          {/* ═════ Origin Story Chapters ═════ */}
+          {/* Origin Story Chapters */}
           <View style={{ marginTop: Spacing.xxxl }} />
 
           <StoryChapter
@@ -561,6 +462,97 @@ export default function AboutTab() {
               Nearby alternatives. All available to every player, completely free.
             </StoryParagraph>
           </StoryChapter>
+
+          {/* ═════ Connect — after the story, with scroll reveals ═════ */}
+          <View style={s.divider} />
+
+          <Reveal>
+            <Eyebrow>Connect</Eyebrow>
+          </Reveal>
+
+          {/* YouTube card */}
+          <Reveal delayPx={20}>
+            <View style={s.ytCard}>
+              <View style={s.ytCardHead}>
+                <View
+                  style={[
+                    s.ytIconWrap,
+                    { backgroundColor: "rgba(255,0,0,0.16)", borderColor: "rgba(255,0,0,0.45)" },
+                  ]}
+                >
+                  <Ionicons name="logo-youtube" size={22} color={Colors.youtube} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Body weight="extrabold" style={{ color: Colors.text, fontSize: 16 }}>
+                    YouTube
+                    <Body weight="bold" style={s.socialHandle}>
+                      {"  "}
+                      {CHANNEL_HANDLE}
+                    </Body>
+                  </Body>
+                  <Muted style={s.socialDescription}>
+                    Court reviews and breakdowns
+                  </Muted>
+                </View>
+              </View>
+
+              <View style={{ flexDirection: "row", gap: 10, marginTop: Spacing.md }}>
+                <Pressable
+                  onPress={onOpenYouTube}
+                  style={({ pressed }) => [s.ytBtnGhost, pressed && { opacity: 0.85 }]}
+                >
+                  <Body weight="extrabold" style={s.ytBtnGhostText}>
+                    Open Channel
+                  </Body>
+                </Pressable>
+                <Pressable
+                  onPress={onSubscribe}
+                  style={({ pressed }) => [s.ytBtnPrimary, pressed && { opacity: 0.9 }]}
+                >
+                  <Ionicons name="add" size={16} color="#fff" />
+                  <Body weight="extrabold" style={s.ytBtnPrimaryText}>
+                    Subscribe
+                  </Body>
+                </Pressable>
+              </View>
+            </View>
+          </Reveal>
+
+          {/* Instagram */}
+          <Reveal delayPx={30}>
+            <View style={{ marginTop: Spacing.md }}>
+              <SocialButton
+                icon={<FontAwesome name="instagram" size={20} color="#e1306c" />}
+                label="Instagram"
+                handle={`@${USERNAME}`}
+                description="Highlights and quick tips"
+                color="#e1306c"
+                onPress={onInstagramPress}
+              />
+            </View>
+          </Reveal>
+
+          {/* TikTok */}
+          <Reveal delayPx={40}>
+            <View style={{ marginTop: Spacing.md }}>
+              <SocialButton
+                icon={<Ionicons name="logo-tiktok" size={20} color={Colors.text} />}
+                label="TikTok"
+                handle={`@${USERNAME}`}
+                description="Shorts and behind-the-scenes"
+                color="#9da3a8"
+                onPress={onTikTokPress}
+              />
+            </View>
+          </Reveal>
+
+          {/* Clipboard hint */}
+          <Reveal delayPx={50}>
+            <Muted style={[s.socialHint, { marginTop: Spacing.md }]}>
+              We copy the handle to your clipboard automatically — paste if the app opens Home
+              instead of the profile.
+            </Muted>
+          </Reveal>
 
           {/* ═════ Footer ═════ */}
           <View style={s.divider} />
