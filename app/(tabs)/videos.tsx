@@ -1,11 +1,5 @@
 // app/(tabs)/videos.tsx  — labelled "About" in the tab bar
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useRef,
-  useState,
-} from "react";
+import React, { createContext, useCallback, useContext } from "react";
 import {
   Alert,
   Dimensions,
@@ -25,10 +19,11 @@ import { useRouter } from "expo-router";
 import Animated, {
   Extrapolation,
   FadeIn,
-  FadeInDown,
   FadeInUp,
   interpolate,
+  measure,
   SharedValue,
+  useAnimatedRef,
   useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
@@ -115,17 +110,26 @@ async function openTikTokWithCopy() {
 
 /* ═════════════════════════════════════════════════════════════════
    Scroll-driven reveal — fade-up as element enters viewport.
-   Mirrors the website's IntersectionObserver-based .reveal class.
+   Uses Reanimated's measure() for absolute viewport position so nested
+   elements (paragraphs inside a chapter, etc.) reveal at the right moment
+   instead of triggering all at once.
    ═════════════════════════════════════════════════════════════════ */
 const ScrollYContext = createContext<SharedValue<number> | null>(null);
 const WINDOW_H = Dimensions.get("window").height;
 
+// When the element's top reaches this fraction of the viewport, start the fade.
+// 0.92 = element top is 92% down the screen (basically just at the bottom)
+// 0.62 = element top is 62% down the screen (fully revealed)
+const REVEAL_START_FRAC = 0.92;
+const REVEAL_END_FRAC = 0.62;
+
 /**
- * Wrap a chunk of content. As the user scrolls and the element's top reaches
- * ~80% down the viewport, it fades up into place. Once revealed, it stays.
+ * Reveal — every wrapped element fades up from 24px below as it scrolls
+ * into the viewport. Measurement uses `measure()` on the UI thread so it
+ * tracks the element's actual on-screen Y position frame-by-frame, working
+ * correctly for nested elements at any depth.
  *
- * Set `delay` to stagger sibling reveals (in ms-equivalent — really a
- * scroll-offset translated to "appears later in the wave").
+ * `delayPx` offsets the trigger so siblings inside a section cascade.
  */
 function Reveal({
   children,
@@ -135,23 +139,34 @@ function Reveal({
   delayPx?: number;
 }) {
   const scrollY = useContext(ScrollYContext);
-  const [topY, setTopY] = useState<number | null>(null);
-  const set = useRef(false);
+  const ref = useAnimatedRef<Animated.View>();
 
   const style = useAnimatedStyle(() => {
-    if (!scrollY || topY === null) {
-      // Not yet measured — start hidden so we don't flash on the first frame
+    // Touch scrollY so the style recomputes on every scroll frame.
+    // (Reanimated only re-runs the worklet when referenced shared values change.)
+    if (scrollY) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const _trigger = scrollY.value;
+    }
+
+    const m = measure(ref);
+    if (!m) {
+      // Not yet laid out — hide so we don't flash before measurement.
       return { opacity: 0, transform: [{ translateY: 24 }] };
     }
-    // Trigger when the element top crosses 80% of the viewport
-    const triggerStart = topY - WINDOW_H * 0.82 + delayPx;
-    const triggerEnd = triggerStart + 140;
+
+    // m.pageY is the element's current Y in the viewport.
+    // Start when top is at REVEAL_START_FRAC of window, end at REVEAL_END_FRAC.
+    const triggerStart = WINDOW_H * REVEAL_START_FRAC + delayPx;
+    const triggerEnd = WINDOW_H * REVEAL_END_FRAC + delayPx;
+
     const p = interpolate(
-      scrollY.value,
+      m.pageY,
       [triggerStart, triggerEnd],
       [0, 1],
       Extrapolation.CLAMP
     );
+
     return {
       opacity: p,
       transform: [{ translateY: interpolate(p, [0, 1], [24, 0]) }],
@@ -159,14 +174,7 @@ function Reveal({
   });
 
   return (
-    <Animated.View
-      onLayout={(e) => {
-        if (set.current) return;
-        set.current = true;
-        setTopY(e.nativeEvent.layout.y);
-      }}
-      style={style}
-    >
+    <Animated.View ref={ref} style={style}>
       {children}
     </Animated.View>
   );
@@ -361,20 +369,10 @@ export default function AboutTab() {
             />
           </Animated.View>
 
-          {/* ═════ One-liner intro ═════ */}
-          <Animated.View
-            entering={FadeInDown.duration(500).delay(80)}
-            style={s.introBlock}
-          >
-            <Body weight="extrabold" style={s.introHeadline}>
-              Real pickleball court reviews.{"\n"}No sponsors. No fluff.
-            </Body>
-          </Animated.View>
-
           {/* ═════ Connect cards (the priority) ═════ */}
           <Animated.View
-            entering={FadeInUp.duration(500).delay(140)}
-            style={{ marginTop: Spacing.xl }}
+            entering={FadeInUp.duration(500).delay(120)}
+            style={{ marginTop: Spacing.xxl }}
           >
             <Eyebrow>Connect</Eyebrow>
           </Animated.View>
@@ -465,31 +463,6 @@ export default function AboutTab() {
               We copy the handle to your clipboard automatically — paste if the app opens Home
               instead of the profile.
             </Muted>
-          </Animated.View>
-
-          {/* ═════ Quick CTAs ═════ */}
-          <Animated.View
-            entering={FadeInUp.duration(500).delay(400)}
-            style={[s.heroCtas, { marginTop: Spacing.xl }]}
-          >
-            <Pressable
-              onPress={() => router.push("/map")}
-              style={({ pressed }) => [s.heroCtaPrimary, pressed && { opacity: 0.92 }]}
-            >
-              <Body weight="extrabold" style={s.heroCtaPrimaryText}>
-                Find Courts
-              </Body>
-              <Ionicons name="arrow-forward" size={16} color={Colors.onBall} />
-            </Pressable>
-
-            <Pressable
-              onPress={() => router.push("/blog")}
-              style={({ pressed }) => [s.heroCtaGhost, pressed && { opacity: 0.8 }]}
-            >
-              <Body weight="extrabold" style={s.heroCtaGhostText}>
-                Read Reviews
-              </Body>
-            </Pressable>
           </Animated.View>
 
           {/* ═════ Story divider ═════ */}
@@ -587,29 +560,6 @@ export default function AboutTab() {
               Interactive court map. Honest ratings across 7 categories. Video walkthroughs.
               Nearby alternatives. All available to every player, completely free.
             </StoryParagraph>
-
-            <Reveal delayPx={40}>
-              <View style={[s.heroCtas, { marginTop: Spacing.md }]}>
-                <Pressable
-                  onPress={() => router.push("/map")}
-                  style={({ pressed }) => [s.heroCtaPrimary, pressed && { opacity: 0.92 }]}
-                >
-                  <Body weight="extrabold" style={s.heroCtaPrimaryText}>
-                    Find a Court
-                  </Body>
-                  <Ionicons name="arrow-forward" size={16} color={Colors.onBall} />
-                </Pressable>
-
-                <Pressable
-                  onPress={() => router.push("/blog")}
-                  style={({ pressed }) => [s.heroCtaGhost, pressed && { opacity: 0.8 }]}
-                >
-                  <Body weight="extrabold" style={s.heroCtaGhostText}>
-                    Read Reviews
-                  </Body>
-                </Pressable>
-              </View>
-            </Reveal>
           </StoryChapter>
 
           {/* ═════ Footer ═════ */}
@@ -669,64 +619,6 @@ const s = StyleSheet.create({
     color: Colors.muted2,
   },
   topLogo: { width: 44, height: 44 },
-
-  /* One-liner intro */
-  introBlock: {
-    marginTop: Spacing.xl,
-    paddingVertical: Spacing.lg,
-    paddingHorizontal: Spacing.lg,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.card,
-  },
-  introHeadline: {
-    color: Colors.text,
-    fontSize: 17,
-    lineHeight: 24,
-    letterSpacing: -0.2,
-  },
-
-  /* Quick CTAs */
-  heroCtas: {
-    flexDirection: "row",
-    gap: Spacing.md,
-    flexWrap: "wrap",
-  },
-  heroCtaPrimary: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 13,
-    paddingHorizontal: 22,
-    borderRadius: Radius.pill,
-    backgroundColor: Colors.ball,
-    borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.18)",
-  },
-  heroCtaPrimaryText: {
-    color: Colors.onBall,
-    fontSize: TypeScale.bodySm,
-    letterSpacing: 1.0,
-    textTransform: "uppercase",
-  },
-  heroCtaGhost: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 13,
-    paddingHorizontal: 22,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: Colors.borderUp,
-    backgroundColor: "transparent",
-  },
-  heroCtaGhostText: {
-    color: Colors.text,
-    fontSize: TypeScale.bodySm,
-    letterSpacing: 1.0,
-    textTransform: "uppercase",
-  },
 
   /* Divider */
   divider: {
