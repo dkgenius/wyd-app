@@ -142,16 +142,36 @@ async function fetchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   return (await res.json()) as T;
 }
 
-/* ───────── WebView injected JS — unchanged ───────── */
+/* ───────── WebView injected JS — strips the website's chrome ─────────
+ * 1. Hides the fixed site header/footer that the PHP page renders.
+ * 2. Collapses .page-hero's huge top padding (140 px desktop / 100 px
+ *    mobile) that the website reserves for that now-hidden fixed header.
+ *    Without (2), there's still a tall black gap before the lesson/quiz
+ *    title even after the header is gone — the page is reserving space
+ *    for a nav that no longer exists in app mode.
+ * 3. Trims `main`'s padding-top so the content sits flush with the app's
+ *    own TopBar.
+ */
 function makeInjectedJS() {
   return `
   (function () {
     try {
-      var css = [
+      var hide = [
         'header','footer','#header','#site-header','.site-header','.header',
         '.topbar','.top-bar','.navbar','.nav','.navigation',
         '#footer','.site-footer','.footer'
       ].join(',') + '{ display:none !important; }';
+
+      // Collapse the top padding the page reserves for the (hidden) header.
+      // The PHP page already drops main → 24 px in ?app=1 mode, but it
+      // leaves .page-hero / .item-content / .quiz-content alone — those
+      // are the actual containers showing 100+ px of black above the title.
+      var tighten =
+        '.page-hero { padding-top: 8px !important; padding-bottom: 20px !important; }' +
+        'main { padding-top: 0 !important; }' +
+        '.item-content, .quiz-content { padding-top: 0 !important; }';
+
+      var css = hide + tighten;
       var style = document.createElement('style');
       style.innerHTML = css;
       document.head && document.head.appendChild(style);
@@ -753,10 +773,17 @@ export default function ClinicTab() {
 
   const injectedJS = useMemo(() => makeInjectedJS(), []);
 
-  /* Top bar — brand-styled. Home view shows brand title; deeper views show
-     back + (share when on item/quiz) + home.                              */
+  /* Top bar — brand-styled. On the Home view we render only the safe-area
+   * spacer; the hero itself is the page identifier (matching the Home,
+   * About, and Reviews tabs). Deeper views get the back / share / home
+   * navigation row.
+   *
+   * The wrapping SafeAreaView already pads `insets.top` so we only need
+   * a small additional breathing-room (8 px) here. Using `insets.top + 8`
+   * was double-padding — visible as a tall black gap at the top of the
+   * Item and Quiz WebViews, where there's no hero image to absorb it.   */
   const TopBar = (
-    <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
+    <View style={[s.topBar, { paddingTop: 8 }]}>
       {stack.length > 1 ? (
         <View style={s.topBarRow}>
           <Pressable
@@ -790,12 +817,7 @@ export default function ClinicTab() {
             <Ionicons name="home-outline" size={20} color={Colors.text} />
           </Pressable>
         </View>
-      ) : (
-        <View>
-          <Eyebrow>Pickleball clinic</Eyebrow>
-          <Title style={{ fontSize: 30, lineHeight: 34, marginTop: 4 }}>Clinic</Title>
-        </View>
-      )}
+      ) : null}
     </View>
   );
 
@@ -821,12 +843,21 @@ export default function ClinicTab() {
           }
           showsVerticalScrollIndicator={false}
         >
-          {/* Hero */}
-          <Display size="lg" style={s.heroTitle}>
-            LEVEL UP{"\n"}YOUR GAME.
+          {/* Hero — matches the website's "— Level Up Your Game" eyebrow,
+              big split heading with ball-green accent, and aspirational sub.
+              Pairs with the Home → Explore "LEVEL UP." card so the user
+              lands on a hero that visually continues that phrase. */}
+          <Eyebrow style={s.heroEyebrow}>— Level Up Your Game</Eyebrow>
+
+          <Display size="xl" style={s.heroTitle}>
+            LEVEL UP{"\n"}
+            <Display size="xl" style={{ color: Colors.ball }}>
+              YOUR GAME.
+            </Display>
           </Display>
+
           <Muted style={s.heroSub}>
-            Curated training paths and topic-by-topic lessons to take your pickleball further.
+            Structured training paths and skill breakdowns for every level — from your first dink to tournament play.
           </Muted>
 
           {/* Start here — the first / featured path */}
@@ -1495,14 +1526,21 @@ const s = StyleSheet.create({
   },
 
   /* Home hero */
-  heroTitle: {
+  heroEyebrow: {
     marginTop: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  heroTitle: {
+    marginTop: 0,
+    // xl Display defaults around 72px lineHeight; tighten slightly for the
+    // 2-line split so "LEVEL UP / YOUR GAME." sits as one tight block.
+    lineHeight: 64,
   },
   heroSub: {
     marginTop: Spacing.lg,
     fontSize: TypeScale.body,
-    lineHeight: 22,
-    maxWidth: 320,
+    lineHeight: 24,
+    maxWidth: 360,
   },
 
   /* "Start here" eyebrow row with ball-green dot */

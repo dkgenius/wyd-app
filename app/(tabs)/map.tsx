@@ -796,14 +796,21 @@ function onPressNearMe() {
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
       <View style={[styles.topBar, { paddingTop: topPad }]}>
+        {/* Brand strip — small em-dash eyebrow to identify the page,
+            matching the pattern set by Home, About, Reviews and Clinic.
+            Compact so the map area still gets maximum vertical space. */}
+        <View style={styles.brandStrip}>
+          <Text style={styles.brandEyebrow}>— Find Courts</Text>
+        </View>
+
         <View style={styles.searchRow}>
           <View style={styles.searchBox}>
             <Ionicons name="search" size={18} color="rgba(255,255,255,0.7)" />
             <TextInput
               value={q}
               onChangeText={setQ}
-              placeholder="Search (optional for later)"
-              placeholderTextColor="rgba(255,255,255,0.45)"
+              placeholder="Search courts or cities…"
+              placeholderTextColor={Colors.muted2}
               style={styles.searchInput}
             />
           </View>
@@ -1143,7 +1150,7 @@ function ResultCard({ item, onPress }: { item: LocationItemUI; onPress: () => vo
             if (u) Linking.openURL(u);
           }}
         >
-          <Ionicons name="newspaper-outline" size={16} color="#071018" />
+          <Ionicons name="newspaper-outline" size={16} color={Colors.onBall} />
           <Text style={styles.cardCtaPrimaryText}>Read</Text>
         </Pressable>
       ) : null}
@@ -1257,7 +1264,7 @@ function DetailsPanel({
     <View style={styles.ctaRow}>
       {hasBlog ? (
         <Pressable style={styles.ctaPrimary} onPress={onOpenBlog}>
-          <Ionicons name="newspaper-outline" size={18} color="#071018" />
+          <Ionicons name="newspaper-outline" size={18} color={Colors.onBall} />
           <Text style={styles.ctaPrimaryText}>Read article</Text>
         </Pressable>
       ) : null}
@@ -1540,6 +1547,21 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bg,
   },
 
+  /* Brand strip — em-dash eyebrow at the very top of the screen,
+   * matching the "— Level Up Your Game" pattern used on the Clinic tab.
+   * Just enough to identify the page without eating map real estate. */
+  brandStrip: {
+    marginBottom: 12,
+  },
+  brandEyebrow: {
+    color: Colors.muted,
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1.8,
+    textTransform: "uppercase",
+    fontFamily: Fonts.body.bold,
+  },
+
   searchRow: { flexDirection: "row", gap: 10, alignItems: "center" },
 
   searchBox: {
@@ -1556,17 +1578,28 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, color: Colors.text, fontFamily: Fonts.body.medium },
 
+  /* Inline pill button — icon + label side-by-side, matching the brand's
+   * flat pill aesthetic used in Reviews/Clinic. Previous version stacked
+   * the icon over the label like a phone toolbar, which felt generic. */
   iconBtn: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 6,
     height: 42,
-    paddingHorizontal: 10,
-    borderRadius: 14,
+    paddingHorizontal: 14,
+    borderRadius: 999,
     borderWidth: 1,
     borderColor: Colors.border,
     backgroundColor: Colors.card,
   },
-  iconBtnText: { marginTop: 2, fontSize: 11, color: "rgba(235,235,235,0.85)", fontWeight: "800", fontFamily: Fonts.body.bold },
+  iconBtnText: {
+    fontSize: 12.5,
+    color: Colors.text,
+    fontWeight: "800",
+    letterSpacing: 0.4,
+    fontFamily: Fonts.body.extrabold,
+  },
 
   actionsRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 10, flexWrap: "wrap" },
 
@@ -1608,16 +1641,27 @@ const styles = StyleSheet.create({
   },
   pillText: { color: "rgba(235,235,235,0.85)", fontWeight: "800", fontSize: 12, fontFamily: Fonts.body.bold },
 
+  /* Active filters badge — reads as a small ball-green eyebrow chip
+   * instead of a neutral gray box, so the user instantly sees that
+   * filters are constraining the result set. */
   activeFilters: {
-    marginTop: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 14,
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: "rgba(235,235,235,0.04)",
+    borderColor: Colors.ballSoft,
+    backgroundColor: Colors.ballDim,
+    alignSelf: "flex-start",
   },
-  activeFiltersText: { color: "rgba(235,235,235,0.75)", fontWeight: "700", fontSize: 12, fontFamily: Fonts.body.semibold },
+  activeFiltersText: {
+    color: Colors.ball,
+    fontWeight: "800",
+    fontSize: 11,
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+    fontFamily: Fonts.body.bold,
+  },
 
   loading: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
   loadingText: { color: Colors.muted, fontWeight: "700", fontFamily: Fonts.body.semibold },

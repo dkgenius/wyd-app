@@ -13,7 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import * as Linking from "expo-linking";
 import * as Clipboard from "expo-clipboard";
 import Constants from "expo-constants";
-import { FontAwesome, Ionicons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
 import Animated, {
@@ -183,54 +183,6 @@ function Reveal({
    Presentational pieces
    ═════════════════════════════════════════════════════════════════ */
 
-/* Social platform button */
-function SocialButton({
-  icon,
-  label,
-  handle,
-  description,
-  color,
-  onPress,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  handle: string;
-  description: string;
-  color: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        s.socialBtn,
-        { borderColor: `${color}55` },
-        pressed && { opacity: 0.92, transform: [{ scale: 0.99 }] },
-      ]}
-    >
-      <View
-        style={[
-          s.socialIconWrap,
-          { backgroundColor: `${color}22`, borderColor: `${color}55` },
-        ]}
-      >
-        {icon}
-      </View>
-      <View style={{ flex: 1 }}>
-        <Body weight="extrabold" style={s.socialLabel}>
-          {label}
-          <Body weight="bold" style={s.socialHandle}>
-            {"  "}
-            {handle}
-          </Body>
-        </Body>
-        <Muted style={s.socialDescription}>{description}</Muted>
-      </View>
-      <Ionicons name="arrow-forward" size={18} color={Colors.muted2} />
-    </Pressable>
-  );
-}
-
 /* One chapter in the origin story */
 function StoryChapter({
   number,
@@ -254,6 +206,7 @@ function StoryChapter({
           </Display>
           <View style={s.chapterMetaLine} />
           <Eyebrow>{tag}</Eyebrow>
+          <View style={s.chapterMetaLine} />
         </View>
 
         <Display size="md" style={s.chapterHeading}>
@@ -295,6 +248,46 @@ function PullQuote({ children }: { children: React.ReactNode }) {
         </Body>
       </View>
     </Reveal>
+  );
+}
+
+/* Flat connect row — mirrors the website's contact-link-row pattern.
+ * Vertical accent bar on the left carries the platform color (replacing the
+ * chunky tinted icon box of the old design); text block in the middle;
+ * arrow on the right. Reads as a single horizontal beat regardless of
+ * which platform it represents. */
+function ConnectRow({
+  name,
+  handle,
+  tagline,
+  accentColor,
+  onPress,
+}: {
+  name: string;
+  handle: string;
+  tagline: string;
+  accentColor: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [s.connectRow, pressed && { opacity: 0.88 }]}
+    >
+      <View style={[s.connectAccent, { backgroundColor: accentColor }]} />
+      <View style={{ flex: 1 }}>
+        <View style={s.connectRowTop}>
+          <Body weight="extrabold" style={s.connectName}>
+            {name}
+          </Body>
+          <Body weight="bold" style={s.connectHandle}>
+            {handle}
+          </Body>
+        </View>
+        <Muted style={s.connectTagline}>{tagline}</Muted>
+      </View>
+      <Ionicons name="arrow-forward" size={16} color={Colors.muted2} />
+    </Pressable>
   );
 }
 
@@ -375,17 +368,16 @@ export default function AboutTab() {
             </View>
           </Reveal>
 
-          {/* Story Hero */}
+          {/* Story Hero — centered for balance on narrow phone width */}
           <Reveal>
             <View style={s.storyEyebrowRow}>
               <Eyebrow>Behind the channel</Eyebrow>
-              <Muted style={s.heroIndex}>EST. 2025</Muted>
             </View>
           </Reveal>
 
           <Reveal delayPx={10}>
             <Display size="xl" style={s.heroTitle}>
-              THE{"\n"}REAL{"\n"}
+              THE REAL{"\n"}
               <Display size="xl" style={{ color: Colors.ball }}>
                 STORY.
               </Display>
@@ -463,92 +455,75 @@ export default function AboutTab() {
             </StoryParagraph>
           </StoryChapter>
 
-          {/* ═════ Connect — after the story, with scroll reveals ═════ */}
+          {/* ═════ Connect — flat link-row pattern matching the website ═════ */}
           <View style={s.divider} />
 
           <Reveal>
-            <Eyebrow>Connect</Eyebrow>
+            <View style={s.connectEyebrowRow}>
+              <Eyebrow>Connect</Eyebrow>
+            </View>
           </Reveal>
 
-          {/* YouTube card */}
+          <Reveal delayPx={10}>
+            <Display size="lg" style={s.connectHeading}>
+              LET&apos;S TALK{"\n"}
+              <Display size="lg" style={{ color: Colors.ball }}>
+                PICKLEBALL.
+              </Display>
+            </Display>
+          </Reveal>
+
           <Reveal delayPx={20}>
-            <View style={s.ytCard}>
-              <View style={s.ytCardHead}>
-                <View
-                  style={[
-                    s.ytIconWrap,
-                    { backgroundColor: "rgba(255,0,0,0.16)", borderColor: "rgba(255,0,0,0.45)" },
-                  ]}
-                >
-                  <Ionicons name="logo-youtube" size={22} color={Colors.youtube} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Body weight="extrabold" style={{ color: Colors.text, fontSize: 16 }}>
-                    YouTube
-                    <Body weight="bold" style={s.socialHandle}>
-                      {"  "}
-                      {CHANNEL_HANDLE}
-                    </Body>
-                  </Body>
-                  <Muted style={s.socialDescription}>
-                    Court reviews and breakdowns
-                  </Muted>
-                </View>
-              </View>
-
-              <View style={{ flexDirection: "row", gap: 10, marginTop: Spacing.md }}>
-                <Pressable
-                  onPress={onOpenYouTube}
-                  style={({ pressed }) => [s.ytBtnGhost, pressed && { opacity: 0.85 }]}
-                >
-                  <Body weight="extrabold" style={s.ytBtnGhostText}>
-                    Open Channel
-                  </Body>
-                </Pressable>
-                <Pressable
-                  onPress={onSubscribe}
-                  style={({ pressed }) => [s.ytBtnPrimary, pressed && { opacity: 0.9 }]}
-                >
-                  <Ionicons name="add" size={16} color="#fff" />
-                  <Body weight="extrabold" style={s.ytBtnPrimaryText}>
-                    Subscribe
-                  </Body>
-                </Pressable>
-              </View>
-            </View>
+            <Body weight="regular" style={s.connectIntro}>
+              Tips, court suggestions, or just to say hi. All real messages get a real reply.
+            </Body>
           </Reveal>
 
-          {/* Instagram */}
           <Reveal delayPx={30}>
-            <View style={{ marginTop: Spacing.md }}>
-              <SocialButton
-                icon={<FontAwesome name="instagram" size={20} color="#e1306c" />}
-                label="Instagram"
-                handle={`@${USERNAME}`}
-                description="Highlights and quick tips"
-                color="#e1306c"
-                onPress={onInstagramPress}
-              />
-            </View>
+            <ConnectRow
+              name="YouTube"
+              handle={CHANNEL_HANDLE}
+              tagline="Court reviews and breakdowns"
+              accentColor={Colors.youtube}
+              onPress={onOpenYouTube}
+            />
           </Reveal>
 
-          {/* TikTok */}
           <Reveal delayPx={40}>
-            <View style={{ marginTop: Spacing.md }}>
-              <SocialButton
-                icon={<Ionicons name="logo-tiktok" size={20} color={Colors.text} />}
-                label="TikTok"
-                handle={`@${USERNAME}`}
-                description="Shorts and behind-the-scenes"
-                color="#9da3a8"
-                onPress={onTikTokPress}
-              />
-            </View>
+            <ConnectRow
+              name="Instagram"
+              handle={`@${USERNAME}`}
+              tagline="Highlights and quick tips"
+              accentColor="#e1306c"
+              onPress={onInstagramPress}
+            />
           </Reveal>
 
-          {/* Clipboard hint */}
           <Reveal delayPx={50}>
-            <Muted style={[s.socialHint, { marginTop: Spacing.md }]}>
+            <ConnectRow
+              name="TikTok"
+              handle={`@${USERNAME}`}
+              tagline="Shorts and behind-the-scenes"
+              accentColor="#9da3a8"
+              onPress={onTikTokPress}
+            />
+          </Reveal>
+
+          {/* Subscribe — primary CTA pulled out of the YouTube card */}
+          <Reveal delayPx={60}>
+            <Pressable
+              onPress={onSubscribe}
+              style={({ pressed }) => [s.subscribeBtn, pressed && { opacity: 0.9 }]}
+            >
+              <Ionicons name="add" size={18} color="#fff" />
+              <Body weight="extrabold" style={s.subscribeBtnText}>
+                Subscribe on YouTube
+              </Body>
+            </Pressable>
+          </Reveal>
+
+          <Reveal delayPx={70}>
+            <Muted style={s.connectHint}>
               We copy the handle to your clipboard automatically — paste if the app opens Home
               instead of the profile.
             </Muted>
@@ -638,36 +613,34 @@ const s = StyleSheet.create({
     fontFamily: Fonts.body.bold,
   },
 
-  /* Story hero */
+  /* Story hero — centered for column balance on phone width */
   storyEyebrowRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent: "center",
     alignItems: "center",
-  },
-  heroIndex: {
-    fontSize: 10,
-    letterSpacing: 2.4,
-    textTransform: "uppercase",
-    color: Colors.muted2,
   },
   heroTitle: {
     marginTop: Spacing.md,
     lineHeight: 76,
+    textAlign: "center",
   },
   heroIntro: {
     marginTop: Spacing.xl,
     lineHeight: 24,
     color: Colors.muted,
     fontSize: TypeScale.body,
+    textAlign: "center",
+    paddingHorizontal: Spacing.sm,
   },
 
-  /* Story chapter */
+  /* Story chapter — meta row + heading also centered for consistency */
   chapter: {
     marginBottom: Spacing.xxxl,
   },
   chapterMeta: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 12,
     marginBottom: Spacing.lg,
   },
@@ -678,13 +651,14 @@ const s = StyleSheet.create({
   },
   chapterMetaLine: {
     height: 1,
-    width: 28,
+    width: 24,
     backgroundColor: Colors.border,
   },
   chapterHeading: {
     fontSize: 44,
     lineHeight: 44,
     color: Colors.text,
+    textAlign: "center",
   },
   storyParagraph: {
     color: Colors.muted,
@@ -704,92 +678,86 @@ const s = StyleSheet.create({
     lineHeight: 24,
   },
 
-  /* YouTube card */
-  ytCard: {
-    marginTop: Spacing.md,
-    padding: Spacing.lg,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.card,
-  },
-  ytCardHead: {
-    flexDirection: "row",
+  /* ── Connect section — flat, website-matching ── */
+  connectEyebrowRow: {
     alignItems: "center",
-    gap: 12,
+    marginBottom: Spacing.md,
   },
-  ytIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.md,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
+  connectHeading: {
+    textAlign: "center",
+    marginBottom: Spacing.md,
+    fontSize: 56,
+    lineHeight: 56,
   },
-  ytBtnPrimary: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 11,
-    paddingHorizontal: 16,
-    borderRadius: Radius.pill,
-    backgroundColor: Colors.youtube,
-  },
-  ytBtnPrimaryText: {
-    color: "#fff",
-    fontSize: TypeScale.bodySm,
-    letterSpacing: 1.0,
-    textTransform: "uppercase",
-  },
-  ytBtnGhost: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 11,
-    paddingHorizontal: 16,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: "rgba(255,255,255,0.04)",
-  },
-  ytBtnGhostText: {
-    color: Colors.text,
-    fontSize: TypeScale.bodySm,
-    letterSpacing: 1.0,
-    textTransform: "uppercase",
-  },
-
-  /* Social button */
-  socialBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    padding: 12,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    backgroundColor: Colors.card,
-  },
-  socialIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.md,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-  },
-  socialLabel: { color: Colors.text, fontSize: 15 },
-  socialHandle: {
+  connectIntro: {
+    textAlign: "center",
     color: Colors.muted,
-    fontSize: 13,
+    fontSize: TypeScale.body,
+    lineHeight: 24,
+    marginBottom: Spacing.xl,
+    paddingHorizontal: Spacing.sm,
+  },
+  connectRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
+    marginTop: Spacing.sm,
+  },
+  connectAccent: {
+    width: 3,
+    height: 28,
+    borderRadius: 2,
+  },
+  connectRowTop: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    flexWrap: "wrap",
+  },
+  connectName: {
+    color: Colors.text,
+    fontSize: 15,
     letterSpacing: 0.2,
   },
-  socialDescription: { fontSize: 12.5, marginTop: 2 },
-  socialHint: {
+  connectHandle: {
+    color: Colors.muted2,
+    fontSize: 13,
+    marginLeft: 8,
+  },
+  connectTagline: {
+    color: Colors.muted,
+    fontSize: 12.5,
+    marginTop: 3,
+  },
+  subscribeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: Radius.pill,
+    backgroundColor: Colors.youtube,
+    marginTop: Spacing.lg,
+  },
+  subscribeBtnText: {
+    color: "#fff",
+    fontSize: 14,
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+  },
+  connectHint: {
     fontSize: 11.5,
     lineHeight: 16,
     color: Colors.muted2,
+    textAlign: "center",
+    marginTop: Spacing.lg,
+    paddingHorizontal: Spacing.md,
   },
 
   /* Footer */

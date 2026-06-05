@@ -14,7 +14,7 @@ import {
   View,
 } from "react-native";
 import * as Location from "expo-location";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -68,9 +68,13 @@ const TYPE_META: Record<PostType, { label: string; color: string }> = {
 };
 
 function normalizePostType(t: unknown): PostType {
-  return t === "court_review" || t === "gear_review" || t === "list" || t === "general"
-    ? t
-    : "general";
+  return isPostType(t) ? t : "general";
+}
+
+// Type predicate — true only for the four valid post types. Used by the
+// route-param sync to ignore garbage values from the URL.
+function isPostType(t: unknown): t is PostType {
+  return t === "court_review" || t === "gear_review" || t === "list" || t === "general";
 }
 
 // Type filter pills, matching the website's blog filters (All / Courts / Gear
@@ -121,12 +125,27 @@ function slugFromBlogUrl(url?: string | null) {
 }
 
 export default function BlogTab() {
+  // Optional ?type=court_review / gear_review / list / general from the route.
+  // Lets other screens (e.g. Explore cards on Home) deep-link straight into a
+  // pre-selected filter instead of always landing on "All".
+  const params = useLocalSearchParams<{ type?: string }>();
+  const initialTypeFilter: TypeFilter =
+    params.type === "all" || isPostType(params.type) ? (params.type as TypeFilter) : "all";
+
   const [inputQ, setInputQ] = useState("");
   const [q, setQ] = useState("");
 
   const [sort, setSort] = useState<"recent" | "nearby">("recent");
   const [radius, setRadius] = useState(25);
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>(initialTypeFilter);
+
+  // Re-sync the filter when the route param changes (e.g. user taps a
+  // different Explore card while the Reviews tab is still mounted).
+  useEffect(() => {
+    if (params.type === "all" || isPostType(params.type)) {
+      setTypeFilter(params.type as TypeFilter);
+    }
+  }, [params.type]);
 
   const [basePosts, setBasePosts] = useState<PostItem[]>([]);
   // Distances by slug from the last "Nearby" lookup; used to rank posts.

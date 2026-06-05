@@ -163,30 +163,48 @@ function NearbyReviewCard({
   );
 }
 
-/* ───────── Quick link card (Clinic / Reviews / About) ───────── */
-function QuickLinkCard({
-  title,
+/* ───────── Explore destination card — typographic, no icon ─────────
+ * Each card uses the brand's signature pattern: small caps eyebrow on top,
+ * a single Bebas Neue display verb (with a ball-green accent word), and a
+ * muted description. Matches the visual language of the website's
+ * "REVIEWED." and "READY TO IMPROVE?" panels instead of the off-brand
+ * Ionicons icons it previously used.
+ */
+function ExploreCard({
+  eyebrow,
+  headline,
+  accent,
   description,
-  icon,
   onPress,
 }: {
-  title: string;
+  eyebrow: string;
+  headline: string;
+  accent?: string;
   description: string;
-  icon: keyof typeof Ionicons.glyphMap;
   onPress: () => void;
 }) {
   return (
-    <Card pressable onPress={onPress} style={styles.quickCard}>
-      <View style={styles.quickIconWrap}>
-        <Ionicons name={icon} size={22} color={Colors.ball} />
+    <Card pressable onPress={onPress} style={styles.exploreCard}>
+      <View style={styles.exploreHead}>
+        <Eyebrow>{eyebrow}</Eyebrow>
+        <Ionicons name="arrow-forward" size={18} color={Colors.muted2} />
       </View>
-      <View style={{ flex: 1 }}>
-        <Title style={styles.quickTitle}>{title}</Title>
-        <Muted numberOfLines={2} style={{ marginTop: 4 }}>
-          {description}
-        </Muted>
-      </View>
-      <Ionicons name="arrow-forward" size={18} color={Colors.muted2} />
+
+      <Display size="lg" style={styles.exploreHeadline}>
+        {headline}
+        {accent ? (
+          <>
+            {" "}
+            <Display size="lg" style={{ color: Colors.ball }}>
+              {accent}
+            </Display>
+          </>
+        ) : null}
+      </Display>
+
+      <Muted numberOfLines={2} style={styles.exploreDescription}>
+        {description}
+      </Muted>
     </Card>
   );
 }
@@ -330,26 +348,33 @@ export default function HomeScreen() {
         )}
       </Section>
 
-      {/* Quick links */}
+      {/* Explore — typographic destination cards */}
       <Section title="Explore">
-        <View style={{ gap: 12 }}>
-          <QuickLinkCard
-            icon="fitness-outline"
-            title="The Clinic"
+        <View style={{ gap: 14 }}>
+          <ExploreCard
+            eyebrow="The Clinic"
+            headline="LEVEL"
+            accent="UP."
             description="Drills, lessons, and learning paths from beginner to advanced."
             onPress={() => router.push("/clinic")}
           />
-          <QuickLinkCard
-            icon="newspaper-outline"
-            title="All Reviews"
-            description="Every court we've visited. Honest ratings, no sponsorships."
-            onPress={() => router.push("/blog")}
+          <ExploreCard
+            eyebrow="Court Reviews"
+            headline="EVERY"
+            accent="COURT."
+            description="Every court we've visited. Honest ratings."
+            onPress={() =>
+              router.push({ pathname: "/blog", params: { type: "court_review" } })
+            }
           />
-          <QuickLinkCard
-            icon="information-circle-outline"
-            title="About WhatYouDink"
-            description="Who we are and why this exists."
-            onPress={() => router.push("/videos")}
+          <ExploreCard
+            eyebrow="Gear Reviews"
+            headline="THE"
+            accent="GEAR."
+            description="Paddles, shoes, bags, and balls — first-hand reviews."
+            onPress={() =>
+              router.push({ pathname: "/blog", params: { type: "gear_review" } })
+            }
           />
         </View>
       </Section>
@@ -453,25 +478,28 @@ const styles = StyleSheet.create({
     lineHeight: 26,
   },
 
-  /* Quick link card */
-  quickCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.lg,
+  /* Explore destination card — typographic, brand-forward */
+  exploreCard: {
     padding: Spacing.lg,
   },
-  quickIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.md,
+  exploreHead: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: Colors.ballDim,
-    borderWidth: 1,
-    borderColor: Colors.ballSoft,
+    justifyContent: "space-between",
+    gap: Spacing.md,
+    marginBottom: Spacing.md,
   },
-  quickTitle: {
-    fontSize: 16,
-    lineHeight: 20,
+  exploreHeadline: {
+    // Display size="lg" defaults to ~52px; we tighten lineHeight so the
+    // headline doesn't fight with the description for visual real estate.
+    fontSize: 48,
+    lineHeight: 46,
+    color: Colors.text,
+    marginBottom: 10,
+  },
+  exploreDescription: {
+    fontSize: TypeScale.body,
+    lineHeight: 22,
+    color: Colors.muted,
   },
 });
