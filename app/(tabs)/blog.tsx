@@ -32,6 +32,17 @@ type PostLocation = {
   rating_overall: number | null;
 };
 
+// Mirrors blog_posts.post_type on the website API. Anything unknown falls
+// back to "general" so the app never renders an empty/broken card.
+type PostType = "court_review" | "gear_review" | "list" | "general";
+
+type PostGear = {
+  category: string | null;
+  brand: string | null;
+  product: string | null;
+  rating_overall: number | null;
+};
+
 type PostItem = {
   id: number;
   slug: string;
@@ -39,10 +50,27 @@ type PostItem = {
   excerpt: string | null;
   featured_image_url: string | null;
   published_at: string | null;
+  post_type: PostType;
+  gear?: PostGear | null;
   url?: string | null;
   url_abs?: string | null;
   location?: PostLocation | null;
 };
+
+// Label + accent color shown on the type badge. Keep colors inside the
+// existing brand palette so nothing clashes with the dark theme.
+const TYPE_META: Record<PostType, { label: string; color: string }> = {
+  court_review: { label: "Court Review", color: Colors.ball },
+  gear_review: { label: "Gear Review", color: "#8FD3FF" },
+  list: { label: "Roundup", color: "#FFD479" },
+  general: { label: "Article", color: Colors.muted },
+};
+
+function normalizePostType(t: unknown): PostType {
+  return t === "court_review" || t === "gear_review" || t === "list" || t === "general"
+    ? t
+    : "general";
+}
 
 type PostsResponse = { ok: boolean; error?: string; posts?: PostItem[] };
 
@@ -122,6 +150,8 @@ export default function BlogTab() {
         excerpt: p.excerpt ?? null,
         featured_image_url: p.featured_image_url ?? null,
         published_at: p.published_at ?? null,
+        post_type: normalizePostType((p as any).post_type),
+        gear: (p as any).gear ?? null,
         location: p.location ?? null,
       }));
 
@@ -238,16 +268,43 @@ export default function BlogTab() {
   /* ───────── Card ───────── */
   const renderItem = useCallback(({ item }: { item: PostItem }) => {
     const dateLabel = fmtDate(item.published_at);
+    const type = item.post_type;
+    const meta = TYPE_META[type];
     const loc = item.location ?? null;
-    const cityState = loc
-      ? [loc.city, loc.state].filter(Boolean).join(", ")
-      : "";
-    const rating =
-      typeof loc?.rating_overall === "number" ? loc.rating_overall.toFixed(1) : null;
+    const gear = item.gear ?? null;
+
+    // Court reviews carry a place; gear reviews carry a product. Other types
+    // (roundups/articles) have neither, so they fall back to date-only.
+    const cityState =
+      type === "court_review" && loc
+        ? [loc.city, loc.state].filter(Boolean).join(", ")
+        : type === "gear_review" && gear?.category
+        ? gear.category
+        : "";
+
+    const subtitle =
+      type === "court_review"
+        ? loc?.name ?? null
+        : type === "gear_review"
+        ? [gear?.brand, gear?.product].filter(Boolean).join(" ") || null
+        : null;
+
+    const ratingNum =
+      type === "court_review"
+        ? loc?.rating_overall
+        : type === "gear_review"
+        ? gear?.rating_overall
+        : null;
+    const rating = typeof ratingNum === "number" ? ratingNum.toFixed(1) : null;
 
     return (
       <Pressable
-        onPress={() => router.push({ pathname: "/blog/[slug]", params: { slug: item.slug } })}
+        onPress={() =>
+          router.push({
+            pathname: "/blog/[slug]",
+            params: { slug: item.slug, type },
+          })
+        }
         style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
       >
         {/* Featured image with rating + share overlay */}
@@ -288,6 +345,13 @@ export default function BlogTab() {
           >
             <Ionicons name="share-outline" size={16} color="#fff" />
           </Pressable>
+
+          <View style={styles.typeBadge}>
+            <View style={[styles.typeDot, { backgroundColor: meta.color }]} />
+            <Body weight="extrabold" style={styles.typeBadgeText}>
+              {meta.label}
+            </Body>
+          </View>
         </View>
 
         {/* Body */}
@@ -302,9 +366,9 @@ export default function BlogTab() {
             {item.title}
           </Title>
 
-          {!!loc?.name && (
+          {!!subtitle && (
             <Muted numberOfLines={1} style={{ marginTop: 4 }}>
-              {loc.name}
+              {subtitle}
             </Muted>
           )}
 
@@ -327,7 +391,7 @@ export default function BlogTab() {
   const Header = useMemo(() => {
     return (
       <View style={styles.headerWrap}>
-        <Eyebrow>Pickleball court reviews</Eyebrow>
+        <Eyebrow>Reviews · gear · roundups</Eyebrow>
         <Title style={styles.h1}>Reviews</Title>
 
         <View style={styles.searchRow}>
@@ -620,6 +684,28 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.55)",
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(255,255,255,0.18)",
+  },
+
+  typeBadge: {
+    position: "absolute",
+    bottom: 12,
+    left: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: Radius.pill,
+    backgroundColor: "rgba(0,0,0,0.62)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.18)",
+  },
+  typeDot: { width: 7, height: 7, borderRadius: 4 },
+  typeBadgeText: {
+    color: "#fff",
+    fontSize: 10.5,
+    letterSpacing: 1.1,
+    textTransform: "uppercase",
   },
 
   cardBody: { padding: Spacing.lg },

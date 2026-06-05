@@ -22,7 +22,7 @@ import { Colors, Fonts, Radius, Spacing, TypeScale } from "@/constants/theme";
 export default function BlogPostWebScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { slug } = useLocalSearchParams<{ slug?: string }>();
+  const { slug, type } = useLocalSearchParams<{ slug?: string; type?: string }>();
   const webRef = useRef<WebView>(null);
   const [canGoBack, setCanGoBack] = useState(false);
   const [articleTitle, setArticleTitle] = useState("Review");
@@ -31,6 +31,23 @@ export default function BlogPostWebScreen() {
     () => (typeof slug === "string" ? slug : ""),
     [slug]
   );
+
+  // Eyebrow label driven by the post_type passed from the Reviews list.
+  // Defaults to "Review" when opened from a context that doesn't pass it.
+  const typeLabel = useMemo(() => {
+    switch (type) {
+      case "court_review":
+        return "Court Review";
+      case "gear_review":
+        return "Gear Review";
+      case "list":
+        return "Roundup";
+      case "general":
+        return "Article";
+      default:
+        return "Review";
+    }
+  }, [type]);
 
   const url = useMemo(() => {
     return `https://whatyoudink.com/post.php?slug=${encodeURIComponent(
@@ -115,7 +132,7 @@ export default function BlogPostWebScreen() {
         </Pressable>
 
         <View style={styles.titleWrap}>
-          <Muted style={styles.eyebrow}>Court Review</Muted>
+          <Muted style={styles.eyebrow}>{typeLabel}</Muted>
           <Body weight="extrabold" numberOfLines={1} style={styles.title}>
             {articleTitle}
           </Body>
