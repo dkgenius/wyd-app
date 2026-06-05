@@ -8,6 +8,7 @@ import {
   Image,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   TextInput,
   View,
@@ -72,6 +73,17 @@ function normalizePostType(t: unknown): PostType {
     : "general";
 }
 
+// Type filter pills, matching the website's blog filters (All / Courts / Gear
+// / Lists / General). "general" is only shown when posts of that type exist.
+type TypeFilter = "all" | PostType;
+const TYPE_FILTERS: { key: TypeFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "court_review", label: "Courts" },
+  { key: "gear_review", label: "Gear" },
+  { key: "list", label: "Lists" },
+  { key: "general", label: "General" },
+];
+
 type PostsResponse = { ok: boolean; error?: string; posts?: PostItem[] };
 
 type NearbyLocation = {
@@ -114,9 +126,11 @@ export default function BlogTab() {
 
   const [sort, setSort] = useState<"recent" | "nearby">("recent");
   const [radius, setRadius] = useState(25);
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
 
   const [basePosts, setBasePosts] = useState<PostItem[]>([]);
-  const [posts, setPosts] = useState<PostItem[]>([]);
+  // Distances by slug from the last "Nearby" lookup; used to rank posts.
+  const [nearbyDist, setNearbyDist] = useState<Map<string, number> | null>(null);
   const [page, setPage] = useState(1);
 
   const [loading, setLoading] = useState(false);
@@ -125,8 +139,36 @@ export default function BlogTab() {
 
   const abortRef = useRef<AbortController | null>(null);
 
-  const visible = useMemo(() => posts.slice(0, page * PER_PAGE), [posts, page]);
-  const hasMore = useMemo(() => posts.length > page * PER_PAGE, [posts.length, page]);
+  // Per-type counts for the filter pills (mirrors the website's pill counts).
+  const typeCounts = useMemo(() => {
+    const c: Record<TypeFilter, number> = {
+      all: basePosts.length,
+      court_review: 0,
+      gear_review: 0,
+      list: 0,
+      general: 0,
+    };
+    for (const p of basePosts) c[p.post_type] += 1;
+    return c;
+  }, [basePosts]);
+
+  // The displayed list is derived: filter by type, then (optionally) rank by
+  // distance when "Nearby" is active. No imperative posts state to keep in sync.
+  const processed = useMemo(() => {
+    let list =
+      typeFilter === "all" ? basePosts : basePosts.filter((p) => p.post_type === typeFilter);
+    if (sort === "nearby" && nearbyDist) {
+      list = [...list].sort(
+        (a, b) =>
+          (nearbyDist.get(a.slug) ?? Number.POSITIVE_INFINITY) -
+          (nearbyDist.get(b.slug) ?? Number.POSITIVE_INFINITY)
+      );
+    }
+    return list;
+  }, [basePosts, typeFilter, sort, nearbyDist]);
+
+  const visible = useMemo(() => processed.slice(0, page * PER_PAGE), [processed, page]);
+  const hasMore = useMemo(() => processed.length > page * PER_PAGE, [processed.length, page]);
 
   const fetchPosts = useCallback(async (replacePage = true) => {
     abortRef.current?.abort();
@@ -156,7 +198,6 @@ export default function BlogTab() {
       }));
 
     setBasePosts(list);
-    setPosts(list);
     if (replacePage) setPage(1);
   }, [q]);
 
@@ -182,11 +223,10 @@ export default function BlogTab() {
 
   const applySort = useCallback(
     async (mode: "recent" | "nearby", rOverride?: number) => {
-      setSort(mode);
       setPage(1);
 
       if (mode === "recent") {
-        setPosts(basePosts);
+        setSort("recent");
         return;
       }
 
@@ -196,7 +236,6 @@ export default function BlogTab() {
       if (status !== "granted") {
         Alert.alert("Nearby", "Allow location to sort posts by nearby reviews.");
         setSort("recent");
-        setPosts(basePosts);
         return;
       }
 
@@ -212,21 +251,23 @@ export default function BlogTab() {
 
       if (distBySlug.size === 0) {
         Alert.alert("Nearby", "No nearby reviewed locations found in that radius.");
-        setPosts(basePosts);
+        setSort("recent");
         return;
       }
 
-      const ranked = [...basePosts].map((p) => ({
-        p,
-        d: distBySlug.get(p.slug) ?? Number.POSITIVE_INFINITY,
-      }));
-
-      ranked.sort((a, b) => a.d - b.d);
-
-      setPosts(ranked.map((x) => x.p));
+      setNearbyDist(distBySlug);
+      setSort("nearby");
     },
-    [basePosts, fetchNearbyRank, radius]
+    [fetchNearbyRank, radius]
   );
+
+  const onSelectType = useCallback((tf: TypeFilter) => {
+    setTypeFilter(tf);
+    setPage(1);
+    // Only court reviews support a "Nearby" sort (they're the geo-located
+    // posts). Every other type just shows most recent.
+    if (tf !== "court_review") setSort("recent");
+  }, []);
 
   const onSubmitSearch = useCallback(() => {
     setQ(inputQ.trim());
@@ -419,6 +460,37 @@ export default function BlogTab() {
           </Pressable>
         </View>
 
+        {/* Type filter pills — mirrors the website (All / Courts / Gear / Lists) */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.typeRow}
+        >
+          {TYPE_FILTERS.map(({ key, label }) => {
+            // Hide "General" unless there are general posts (or it's selected).
+            if (key === "general" && typeCounts.general === 0 && typeFilter !== "general") {
+              return null;
+            }
+            const on = typeFilter === key;
+            return (
+              <Pressable
+                key={key}
+                onPress={() => onSelectType(key)}
+                style={[styles.typePill, on && styles.typePillOn]}
+              >
+                <Body
+                  weight="bold"
+                  style={[styles.typePillText, on && styles.typePillTextOn]}
+                >
+                  {label}
+                </Body>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
+        {/* Sort is only meaningful for court reviews (the geo-located posts). */}
+        {typeFilter === "court_review" && (
         <View style={styles.sortRow}>
           <Pressable
             onPress={() => applySort("recent")}
@@ -466,9 +538,10 @@ export default function BlogTab() {
             </View>
           )}
         </View>
+        )}
       </View>
     );
-  }, [applySort, inputQ, onSubmitSearch, radius, sort]);
+  }, [applySort, inputQ, onSelectType, onSubmitSearch, radius, sort, typeCounts, typeFilter]);
 
   if (loading && visible.length === 0) {
     return (
@@ -584,6 +657,30 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     textTransform: "uppercase",
   },
+
+  /* Type filter pills */
+  typeRow: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+    paddingRight: Spacing.sm,
+  },
+  typePill: {
+    paddingVertical: 7,
+    paddingHorizontal: 16,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
+  },
+  typePillOn: { backgroundColor: Colors.ball, borderColor: Colors.ball },
+  typePillText: {
+    color: Colors.text,
+    fontSize: TypeScale.caption,
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+  },
+  typePillTextOn: { color: Colors.onBall },
 
   /* Sort row */
   sortRow: {

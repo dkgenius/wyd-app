@@ -44,3 +44,6 @@ app-example
 
 # Claude Code local settings
 .claude/
+
+# Throwaway QR for Expo Go previews
+ios-preview-qr.png
