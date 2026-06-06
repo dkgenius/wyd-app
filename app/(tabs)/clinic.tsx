@@ -1370,6 +1370,8 @@ export default function ClinicTab() {
             onShouldStartLoadWithRequest={interceptClinicNav}
             scrollEnabled
             contentInsetAdjustmentBehavior="never"
+            automaticallyAdjustContentInsets={false}
+            contentInset={{ top: 0, left: 0, right: 0, bottom: 0 }}
             style={{ flex: 1, backgroundColor: Colors.bg }}
             startInLoadingState
             renderLoading={() => (
@@ -1423,6 +1425,7 @@ export default function ClinicTab() {
               scrollEnabled
               contentInsetAdjustmentBehavior="never"
               automaticallyAdjustContentInsets={false}
+              contentInset={{ top: 0, left: 0, right: 0, bottom: 0 }}
               style={{ flex: 1, backgroundColor: Colors.bg }}
               startInLoadingState
               renderLoading={() => (
