@@ -13,6 +13,17 @@
  *   <Eyebrow>SECTION LABEL</Eyebrow>             // 11px uppercase ball-green
  *
  * Each accepts standard <Text> props (style, numberOfLines, etc.).
+ *
+ * Font scaling policy:
+ *   The OS text-size / accessibility setting scales BOTH font size and line
+ *   height on iOS. On a device with a larger text size that silently changes
+ *   how headlines wrap and how loosely lines are spaced — and it diverges
+ *   from Android, which uses a different scale. To keep the brand layout
+ *   identical across devices and platforms:
+ *     - Display / Title / Subtitle / Eyebrow are design-critical → no scaling.
+ *     - Body / Muted still scale (for readability) but are capped so a large
+ *       accessibility setting can't blow the layout apart.
+ *   Callers can override per-instance by passing allowFontScaling explicitly.
  */
 
 import { Text, TextProps, TextStyle } from "react-native";
@@ -20,6 +31,8 @@ import { Colors, Fonts, TypeScale } from "@/constants/theme";
 
 type DisplaySize = "xl" | "lg" | "md";
 type FontWeightTier = "regular" | "medium" | "semibold" | "bold" | "extrabold";
+
+const BODY_MAX_SCALE = 1.3;
 
 interface BaseProps extends TextProps {
   color?: string;
@@ -55,7 +68,7 @@ export function Display({ size = "lg", color, style, children, ...rest }: Displa
     color: color ?? Colors.text,
   };
   return (
-    <Text style={[baseStyle, style]} {...rest}>
+    <Text allowFontScaling={false} style={[baseStyle, style]} {...rest}>
       {children}
     </Text>
   );
@@ -73,7 +86,7 @@ export function Title({ color, style, children, ...rest }: BaseProps) {
     color: color ?? Colors.text,
   };
   return (
-    <Text style={[baseStyle, style]} {...rest}>
+    <Text allowFontScaling={false} style={[baseStyle, style]} {...rest}>
       {children}
     </Text>
   );
@@ -90,7 +103,7 @@ export function Subtitle({ color, style, children, ...rest }: BaseProps) {
     color: color ?? Colors.text,
   };
   return (
-    <Text style={[baseStyle, style]} {...rest}>
+    <Text allowFontScaling={false} style={[baseStyle, style]} {...rest}>
       {children}
     </Text>
   );
@@ -114,7 +127,7 @@ export function Body({
     color: color ?? Colors.text,
   };
   return (
-    <Text style={[baseStyle, style]} {...rest}>
+    <Text maxFontSizeMultiplier={BODY_MAX_SCALE} style={[baseStyle, style]} {...rest}>
       {children}
     </Text>
   );
@@ -131,7 +144,7 @@ export function Muted({ color, style, children, ...rest }: BaseProps) {
     color: color ?? Colors.muted,
   };
   return (
-    <Text style={[baseStyle, style]} {...rest}>
+    <Text maxFontSizeMultiplier={BODY_MAX_SCALE} style={[baseStyle, style]} {...rest}>
       {children}
     </Text>
   );
@@ -150,7 +163,7 @@ export function Eyebrow({ color, style, children, ...rest }: BaseProps) {
     color: color ?? Colors.ball,
   };
   return (
-    <Text style={[baseStyle, style]} {...rest}>
+    <Text allowFontScaling={false} style={[baseStyle, style]} {...rest}>
       {children}
     </Text>
   );

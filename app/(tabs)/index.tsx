@@ -98,7 +98,15 @@ function Hero() {
     <View style={styles.hero}>
       <Eyebrow style={{ marginBottom: 12 }}>Pickleball court reviews</Eyebrow>
 
-      <Display size="xl" style={styles.heroTitle}>
+      {/* numberOfLines + adjustsFontSizeToFit keep the designed 2-line break:
+          on a narrow screen the headline scales down instead of wrapping
+          "WORTH YOUR TIME." onto a third line. */}
+      <Display
+        size="xl"
+        style={styles.heroTitle}
+        numberOfLines={2}
+        adjustsFontSizeToFit
+      >
         FIND COURTS{"\n"}WORTH YOUR TIME.
       </Display>
 
