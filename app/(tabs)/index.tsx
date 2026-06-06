@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
+  Text,
   StyleSheet,
   Pressable,
   ActivityIndicator,
@@ -203,9 +204,11 @@ function ExploreCard({
         {accent ? (
           <>
             {" "}
-            <Display size="lg" style={{ color: Colors.ball }}>
-              {accent}
-            </Display>
+            {/* Plain inline Text so the accent inherits the parent headline's
+                Bebas font, 48px size and lineHeight, and only changes color.
+                A nested <Display> forced the default 56px onto the 48px
+                headline, which clipped the taller caps above "COURT"/"GEAR". */}
+            <Text style={{ color: Colors.ball }}>{accent}</Text>
           </>
         ) : null}
       </Display>

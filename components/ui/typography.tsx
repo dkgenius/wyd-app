@@ -67,10 +67,11 @@ export function Display({ size = "lg", color, style, children, ...rest }: Displa
     color: color ?? Colors.text,
     // At this tight lineHeight, iOS would clip the tops of Bebas Neue's tall
     // caps on the first line. A small top inset gives the ascenders room
-    // WITHOUT loosening the spacing between lines. includeFontPadding:false
-    // removes Android's extra built-in padding so both platforms match.
+    // WITHOUT loosening the spacing between lines. Kept minimal so the
+    // headline still sits tight to whatever is above it. includeFontPadding:
+    // false removes Android's extra built-in padding so both platforms match.
     includeFontPadding: false,
-    paddingTop: Math.round(sizes[size] * 0.16),
+    paddingTop: Math.round(sizes[size] * 0.08),
   };
   return (
     <Text allowFontScaling={false} style={[baseStyle, style]} {...rest}>
