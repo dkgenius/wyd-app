@@ -1532,9 +1532,8 @@ const s = StyleSheet.create({
   },
   heroTitle: {
     marginTop: 0,
-    // xl Display defaults around 72px lineHeight; tighten slightly for the
-    // 2-line split so "LEVEL UP / YOUR GAME." sits as one tight block.
-    lineHeight: 64,
+    // No lineHeight override: a value below the Display default clips Bebas
+    // Neue's tall caps at the top on iOS. Inherit the safe ~1.2x line box.
   },
   heroSub: {
     marginTop: Spacing.lg,

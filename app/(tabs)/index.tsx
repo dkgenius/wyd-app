@@ -490,11 +490,9 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   exploreHeadline: {
-    // Display size="lg" defaults to ~52px; we tighten lineHeight so the
-    // headline doesn't fight with the description for visual real estate.
-    // Keep lineHeight >= fontSize so Bebas Neue caps don't clip on iOS.
+    // Keep lineHeight ~1.2x fontSize so Bebas Neue caps don't clip on iOS.
     fontSize: 48,
-    lineHeight: 52,
+    lineHeight: 58,
     color: Colors.text,
     marginBottom: 10,
   },

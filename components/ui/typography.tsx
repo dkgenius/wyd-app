@@ -46,10 +46,11 @@ export function Display({ size = "lg", color, style, children, ...rest }: Displa
   const baseStyle: TextStyle = {
     fontFamily: Fonts.display,
     fontSize: sizes[size],
-    // Bebas Neue has tall caps. A lineHeight below the font size clips the
-    // glyphs on iOS (which, unlike Android, has no includeFontPadding). Keep
-    // lineHeight slightly ABOVE fontSize so the headline renders fully on both.
-    lineHeight: Math.round(sizes[size] * 1.05),
+    // Bebas Neue has very tall caps. iOS (unlike Android) has no
+    // includeFontPadding, so any lineHeight near or below the font's natural
+    // line box clips the glyph tops. ~1.2x clears the ascenders on both
+    // platforms. Don't override this lower in screen styles or it clips again.
+    lineHeight: Math.round(sizes[size] * 1.2),
     letterSpacing: 1.4,
     color: color ?? Colors.text,
   };

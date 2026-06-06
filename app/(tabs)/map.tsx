@@ -461,7 +461,10 @@ export default function MapScreen() {
   const [listLimit, setListLimit] = useState(10);
 
   const bottomPad = insets.bottom + 86;
-  const topPad = insets.top + 8;
+  // The outer SafeAreaView (edges include "top") already pads insets.top, so
+  // the top bar only needs a small gap. Adding insets.top here again is what
+  // left a big black band above the header on both iOS and Android.
+  const topPad = 8;
 
   const recenterTo = useCallback((r: Region) => {
     regionRef.current = r;
@@ -800,7 +803,7 @@ function onPressNearMe() {
             matching the pattern set by Home, About, Reviews and Clinic.
             Compact so the map area still gets maximum vertical space. */}
         <View style={styles.brandStrip}>
-          <Text style={styles.brandEyebrow}>— Find Courts</Text>
+          <Text style={styles.brandEyebrow}>— Courts</Text>
         </View>
 
         <View style={styles.searchRow}>
