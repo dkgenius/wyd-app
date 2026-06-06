@@ -50,8 +50,8 @@ export default function AppWebviewScreen() {
   if (!safeUrl) return null;
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
-      <View style={[styles.topBar, { paddingTop: insets.top }]}>
+    <SafeAreaView style={styles.safe} edges={["left", "right"]}>
+      <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
         <Pressable onPress={handleBack} style={styles.iconBtn}>
           <Ionicons name="chevron-back" size={24} color="#fff" />
         </Pressable>

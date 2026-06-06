@@ -124,9 +124,12 @@ export default function BlogPostWebScreen() {
     }
   }, [articleTitle, shareUrl]);
 
+  // edges drops "top" so the top inset is applied once, via the manual
+  // paddingTop below. Having both the SafeAreaView top edge AND
+  // paddingTop: insets.top double-counted the inset and left a black band.
   return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
-      <View style={[styles.topBar, { paddingTop: insets.top }]}>
+    <SafeAreaView style={styles.safe} edges={["left", "right"]}>
+      <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
         <Pressable onPress={handleBack} style={({ pressed }) => [styles.iconBtn, pressed && styles.iconBtnPressed]} hitSlop={8}>
           <Ionicons name="chevron-back" size={22} color={Colors.text} />
         </Pressable>
