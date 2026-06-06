@@ -97,7 +97,9 @@ function BrandHeader() {
 function Hero() {
   return (
     <View style={styles.hero}>
-      <Eyebrow style={{ marginBottom: 12 }}>Pickleball court reviews</Eyebrow>
+      {/* Small marginBottom: the headline's paddingTop already adds room
+          above the caps, so keep this tight to avoid a big eyebrow→title gap. */}
+      <Eyebrow style={{ marginBottom: 4 }}>Pickleball court reviews</Eyebrow>
 
       {/* numberOfLines + adjustsFontSizeToFit keep the designed 2-line break:
           on a narrow screen the headline scales down instead of wrapping
@@ -204,11 +206,12 @@ function ExploreCard({
         {accent ? (
           <>
             {" "}
-            {/* Plain inline Text so the accent inherits the parent headline's
-                Bebas font, 48px size and lineHeight, and only changes color.
-                A nested <Display> forced the default 56px onto the 48px
-                headline, which clipped the taller caps above "COURT"/"GEAR". */}
-            <Text style={{ color: Colors.ball }}>{accent}</Text>
+            {/* Inline Text inherits the parent headline's Bebas font + line
+                metrics. We bump fontSize to 56 (vs the 48px headline) so the
+                accent word stands taller — the intended brand effect. The
+                parent's lineHeight (exploreHeadline) is sized to hold this
+                taller word so it doesn't clip. */}
+            <Text style={{ color: Colors.ball, fontSize: 56 }}>{accent}</Text>
           </>
         ) : null}
       </Display>
@@ -420,6 +423,12 @@ const styles = StyleSheet.create({
   },
   heroTitle: {
     marginTop: 0,
+    // adjustsFontSizeToFit shrinks the font on narrow screens but not the
+    // lineHeight, which made the two lines look loosely spaced. Pin a tight
+    // lineHeight tuned for the shrunk size so the lines sit close on every
+    // device; paddingTop keeps the first line's tall caps from clipping.
+    lineHeight: 60,
+    paddingTop: 12,
   },
   heroSub: {
     marginTop: Spacing.lg,
@@ -501,10 +510,11 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   exploreHeadline: {
-    // Tight line height; clip protection comes from the Display component's
-    // paddingTop, so we don't need to loosen this to avoid clipping.
+    // Base word is 48px; the accent word is 56px. lineHeight is sized to the
+    // TALLER accent so it isn't clipped. These headlines are single-line, so
+    // the taller line box adds no visible inter-line spacing.
     fontSize: 48,
-    lineHeight: 46,
+    lineHeight: 58,
     color: Colors.text,
     marginBottom: 10,
   },
