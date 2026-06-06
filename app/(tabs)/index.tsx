@@ -498,9 +498,10 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   exploreHeadline: {
-    // Keep lineHeight ~1.2x fontSize so Bebas Neue caps don't clip on iOS.
+    // Tight line height; clip protection comes from the Display component's
+    // paddingTop, so we don't need to loosen this to avoid clipping.
     fontSize: 48,
-    lineHeight: 58,
+    lineHeight: 46,
     color: Colors.text,
     marginBottom: 10,
   },
