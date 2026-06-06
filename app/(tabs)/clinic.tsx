@@ -718,11 +718,18 @@ export default function ClinicTab() {
 
   /* Intercept in-page nav from WebView to native screens */
   const interceptClinicNav = useCallback(
-    (url: string) => {
+    (req: { url?: string; navigationType?: string }) => {
       try {
-        const u = String(url || "");
+        const u = String(req?.url || "");
         if (!u) return true;
         if (!u.includes("whatyoudink.com")) return true;
+
+        // Only hijack real in-page link taps. The WebView's own initial
+        // document load has navigationType "other" and MUST be allowed —
+        // iOS fires this handler for the initial URL (Android does not), so
+        // returning false for it blocks the page and the Item/Quiz screen is
+        // stuck on "Loading…" forever on iOS.
+        if (req?.navigationType !== "click") return true;
 
         if (u.includes("/clinic/paths.php")) {
           replaceView({ name: "paths" });
@@ -1353,7 +1360,7 @@ export default function ClinicTab() {
             source={{ uri: websiteQuizUrl }}
             originWhitelist={["*"]}
             injectedJavaScript={injectedJS}
-            onShouldStartLoadWithRequest={(req) => interceptClinicNav(req.url)}
+            onShouldStartLoadWithRequest={interceptClinicNav}
             scrollEnabled
             contentInsetAdjustmentBehavior="never"
             style={{ flex: 1, backgroundColor: Colors.bg }}
@@ -1405,7 +1412,7 @@ export default function ClinicTab() {
               source={{ uri: websiteItemUrl }}
               originWhitelist={["*"]}
               injectedJavaScript={injectedJS}
-              onShouldStartLoadWithRequest={(req) => interceptClinicNav(req.url)}
+              onShouldStartLoadWithRequest={interceptClinicNav}
               scrollEnabled
               contentInsetAdjustmentBehavior="never"
               automaticallyAdjustContentInsets={false}
