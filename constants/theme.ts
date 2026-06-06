@@ -76,14 +76,14 @@ export const Fonts = {
  * fixed sizes here — sized for phone screens (375–428pt typical).
  */
 export const TypeScale = {
-  display1: 72, // hero h1 — Bebas Neue
-  display2: 56, // section h2 — Bebas Neue
-  display3: 40, // sub-section / card display — Bebas Neue
-  title: 24, // screen title — DM Sans 800
-  subtitle: 18, // section title — DM Sans 700
-  body: 16,
-  bodySm: 14,
-  caption: 12,
+  display1: 66, // hero h1 — Bebas Neue
+  display2: 52, // section h2 — Bebas Neue
+  display3: 38, // sub-section / card display — Bebas Neue
+  title: 22, // screen title — DM Sans 800
+  subtitle: 17, // section title — DM Sans 700
+  body: 15,
+  bodySm: 13,
+  caption: 11,
   micro: 11, // eyebrow / uppercase labels
 } as const;
 

@@ -87,7 +87,7 @@ export function Title({ color, style, children, ...rest }: BaseProps) {
   const baseStyle: TextStyle = {
     fontFamily: Fonts.body.extrabold,
     fontSize: TypeScale.title,
-    lineHeight: 30,
+    lineHeight: 27,
     letterSpacing: -0.3,
     color: color ?? Colors.text,
   };
@@ -105,7 +105,7 @@ export function Subtitle({ color, style, children, ...rest }: BaseProps) {
   const baseStyle: TextStyle = {
     fontFamily: Fonts.body.bold,
     fontSize: TypeScale.subtitle,
-    lineHeight: 24,
+    lineHeight: 22,
     color: color ?? Colors.text,
   };
   return (
@@ -129,7 +129,7 @@ export function Body({
   const baseStyle: TextStyle = {
     fontFamily: Fonts.body[weight],
     fontSize: size === "small" ? TypeScale.bodySm : TypeScale.body,
-    lineHeight: size === "small" ? 20 : 24,
+    lineHeight: size === "small" ? 18 : 21,
     color: color ?? Colors.text,
   };
   return (
@@ -146,7 +146,7 @@ export function Muted({ color, style, children, ...rest }: BaseProps) {
   const baseStyle: TextStyle = {
     fontFamily: Fonts.body.medium,
     fontSize: TypeScale.bodySm,
-    lineHeight: 20,
+    lineHeight: 18,
     color: color ?? Colors.muted,
   };
   return (

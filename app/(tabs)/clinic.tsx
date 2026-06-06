@@ -162,19 +162,26 @@ function makeInjectedJS() {
         '#footer','.site-footer','.footer'
       ].join(',') + '{ display:none !important; }';
 
-      // Collapse the top padding the page reserves for the (hidden) header.
-      // The PHP page already drops main → 24 px in ?app=1 mode, but it
-      // leaves .page-hero / .item-content / .quiz-content alone — those
-      // are the actual containers showing 100+ px of black above the title.
+      // Collapse the top space the page reserves for the (hidden) fixed
+      // header. The page's mobile CSS sets .page-hero{padding:100px 20px 40px}
+      // and its ?app=1 style sets main{padding-top:24px!important}. We override
+      // both. main carries !important on the page side, so our rule must win
+      // the cascade — see the body-append note below.
       var tighten =
-        '.page-hero { padding-top: 8px !important; padding-bottom: 20px !important; }' +
-        'main { padding-top: 0 !important; }' +
-        '.item-content, .quiz-content { padding-top: 0 !important; }';
+        '.page-hero { padding-top: 4px !important; padding-bottom: 16px !important; }' +
+        'main { padding-top: 0 !important; margin-top: 0 !important; }' +
+        '.item-content, .quiz-content { padding-top: 0 !important; }' +
+        '.path-ribbon { display: none !important; }';
 
       var css = hide + tighten;
       var style = document.createElement('style');
       style.innerHTML = css;
-      document.head && document.head.appendChild(style);
+      // Append to the END of <body>, NOT <head>. The page's app-mode style
+      // (main{padding-top:24px!important}) lives in a <style> inside <body>,
+      // which is later in document order than <head>. With equal specificity
+      // and both !important, the later rule wins — so a <head> override loses.
+      // Appending at the end of <body> makes ours win.
+      (document.body || document.documentElement).appendChild(style);
     } catch(e) {}
 
     function hardTop(){

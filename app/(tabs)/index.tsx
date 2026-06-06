@@ -211,7 +211,7 @@ function ExploreCard({
                 accent word stands taller — the intended brand effect. The
                 parent's lineHeight (exploreHeadline) is sized to hold this
                 taller word so it doesn't clip. */}
-            <Text style={{ color: Colors.ball, fontSize: 56 }}>{accent}</Text>
+            <Text style={{ color: Colors.ball, fontSize: 50 }}>{accent}</Text>
           </>
         ) : null}
       </Display>
@@ -427,8 +427,8 @@ const styles = StyleSheet.create({
     // lineHeight, which made the two lines look loosely spaced. Pin a tight
     // lineHeight tuned for the shrunk size so the lines sit close on every
     // device; paddingTop keeps the first line's tall caps from clipping.
-    lineHeight: 60,
-    paddingTop: 12,
+    lineHeight: 54,
+    paddingTop: 10,
   },
   heroSub: {
     marginTop: Spacing.lg,
@@ -510,11 +510,11 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   exploreHeadline: {
-    // Base word is 48px; the accent word is 56px. lineHeight is sized to the
+    // Base word is 44px; the accent word is 50px. lineHeight is sized to the
     // TALLER accent so it isn't clipped. These headlines are single-line, so
     // the taller line box adds no visible inter-line spacing.
-    fontSize: 48,
-    lineHeight: 58,
+    fontSize: 44,
+    lineHeight: 52,
     color: Colors.text,
     marginBottom: 10,
   },
