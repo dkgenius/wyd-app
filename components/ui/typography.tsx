@@ -46,7 +46,10 @@ export function Display({ size = "lg", color, style, children, ...rest }: Displa
   const baseStyle: TextStyle = {
     fontFamily: Fonts.display,
     fontSize: sizes[size],
-    lineHeight: sizes[size] * 0.92,
+    // Bebas Neue has tall caps. A lineHeight below the font size clips the
+    // glyphs on iOS (which, unlike Android, has no includeFontPadding). Keep
+    // lineHeight slightly ABOVE fontSize so the headline renders fully on both.
+    lineHeight: Math.round(sizes[size] * 1.05),
     letterSpacing: 1.4,
     color: color ?? Colors.text,
   };

@@ -934,8 +934,10 @@ function onPressNearMe() {
 
       {/* DETAILS MODAL */}
       <Modal visible={!!selected} animationType="slide" onRequestClose={() => setSelected(null)}>
-        <SafeAreaView style={styles.modalSafe} edges={["top", "left", "right"]}>
-          <View style={[styles.modalHeader, { paddingTop: insets.top ? 8 : 12 }]}>
+        {/* edges drops "top": SafeAreaView reports a 0 top inset inside an iOS
+            <Modal>, so we apply the inset manually via useSafeAreaInsets(). */}
+        <SafeAreaView style={styles.modalSafe} edges={["left", "right"]}>
+          <View style={[styles.modalHeader, { paddingTop: insets.top + 8 }]}>
             <Pressable onPress={() => setSelected(null)} style={styles.modalClose}>
               <Ionicons name="chevron-down" size={22} color="white" />
               <Text style={styles.modalCloseText}>Close</Text>
@@ -954,18 +956,28 @@ function onPressNearMe() {
               })()}
               onOpenBlog={() => {
                 const slug = selected.blog?.slug ? String(selected.blog.slug) : "";
-                if (slug) {
-                  try {
-                    router.push(`/blog/${slug}` as any);
-                    return;
-                  } catch {}
-                }
                 const u = selected.blog?.url ? String(selected.blog.url) : "";
+                // Close the popup BEFORE navigating. On iOS a visible <Modal>
+                // renders above the navigation stack, so pushing the blog route
+                // while the modal is open loads the screen behind it (looks like
+                // nothing happens). Dismiss first, then navigate on the next tick.
+                setSelected(null);
+                if (slug) {
+                  setTimeout(() => {
+                    try {
+                      router.push(`/blog/${slug}` as any);
+                    } catch {
+                      if (u) Linking.openURL(u);
+                    }
+                  }, 0);
+                  return;
+                }
                 if (u) Linking.openURL(u);
                 else Alert.alert("Blog", "No blog article link available.");
               }}
               onOpenYouTube={() => {
                 const u = selected.youtube_url ? String(selected.youtube_url) : "";
+                setSelected(null);
                 if (u) Linking.openURL(u);
                 else Alert.alert("YouTube", "No YouTube link available.");
               }}
@@ -976,8 +988,10 @@ function onPressNearMe() {
 
       {/* FILTERS MODAL */}
       <Modal visible={filtersOpen} animationType="slide" onRequestClose={() => setFiltersOpen(false)}>
-        <SafeAreaView style={styles.modalSafe} edges={["top", "left", "right"]}>
-          <View style={[styles.modalHeader, { paddingTop: insets.top ? 8 : 12 }]}>
+        {/* edges drops "top": SafeAreaView reports a 0 top inset inside an iOS
+            <Modal>, so we apply the inset manually via useSafeAreaInsets(). */}
+        <SafeAreaView style={styles.modalSafe} edges={["left", "right"]}>
+          <View style={[styles.modalHeader, { paddingTop: insets.top + 8 }]}>
             <Pressable onPress={() => setFiltersOpen(false)} style={styles.modalClose}>
               <Ionicons name="chevron-down" size={22} color="white" />
               <Text style={styles.modalCloseText}>Filters</Text>
