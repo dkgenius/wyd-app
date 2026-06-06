@@ -10,7 +10,8 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.whatyoudink.app"
+      "bundleIdentifier": "com.whatyoudink.app",
+      "buildNumber": "1"
     },
     "android": {
       "package": "com.whatyoudink.app",
