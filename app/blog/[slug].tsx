@@ -1,13 +1,17 @@
 import React, { useMemo, useRef, useState, useCallback } from "react";
-import { View, Pressable, StyleSheet, Platform, Share } from "react-native";
+import { View, Pressable, StyleSheet, Platform, Share, Linking } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { WebView } from "react-native-webview";
+import type { ShouldStartLoadRequest } from "react-native-webview/lib/WebViewTypes";
 import * as WebBrowser from "expo-web-browser";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Body, Muted } from "@/components/ui";
 import { Colors, Fonts, Radius, Spacing, TypeScale } from "@/constants/theme";
+import { isMapUrl, isCourtsDirectoryUrl } from "../../src/nav/links";
+
+const SITE_HOST = "whatyoudink.com";
 
 /**
  * Blog post detail screen — loads the public post page inside a WebView.
@@ -106,6 +110,30 @@ export default function BlogPostWebScreen() {
     }
   };
 
+  // In-article links route to native screens where it matters: "Browse all
+  // courts" / directory links open the native Courts tab, and map links open
+  // the native Map tab. The article (and an individual court page) stay in the
+  // WebView; off-site links open the system browser.
+  const onShouldStart = (req: ShouldStartLoadRequest) => {
+    const reqUrl = req?.url || "";
+    if (!reqUrl) return true;
+    if (req.isTopFrame === false) return true;
+    if (isMapUrl(reqUrl)) {
+      router.push("/map");
+      return false;
+    }
+    if (isCourtsDirectoryUrl(reqUrl)) {
+      router.push("/courts");
+      return false;
+    }
+    if (reqUrl.startsWith("about:") || reqUrl.includes(SITE_HOST)) return true;
+    if (/^https?:\/\//i.test(reqUrl) || /^(tel:|mailto:)/i.test(reqUrl)) {
+      Linking.openURL(reqUrl).catch(() => {});
+      return false;
+    }
+    return true;
+  };
+
   const openInBrowser = async () => {
     try {
       await WebBrowser.openBrowserAsync(shareUrl);
@@ -159,6 +187,7 @@ export default function BlogPostWebScreen() {
         onNavigationStateChange={(navState) =>
           setCanGoBack(Boolean(navState.canGoBack))
         }
+        onShouldStartLoadWithRequest={onShouldStart}
         injectedJavaScript={injectedJS}
         allowsBackForwardNavigationGestures={Platform.OS === "ios"}
         onMessage={(event) => {
