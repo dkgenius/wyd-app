@@ -1,10 +1,14 @@
 // app/webview.tsx
 import React, { useMemo, useRef, useState } from "react";
-import { View, Text, Pressable, StyleSheet, Platform } from "react-native";
+import { View, Text, Pressable, StyleSheet, Platform, Linking } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { WebView } from "react-native-webview";
+import type { ShouldStartLoadRequest } from "react-native-webview/lib/WebViewTypes";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { isMapUrl, isCourtsDirectoryUrl } from "../src/nav/links";
+
+const SITE_HOST = "whatyoudink.com";
 
 export default function AppWebviewScreen() {
   const router = useRouter();
@@ -46,6 +50,30 @@ export default function AppWebviewScreen() {
     }
   };
 
+  // Keep navigation native where it matters: map links open the native Map tab,
+  // "view all courts" / directory links open the native Courts tab. The court
+  // page itself (and other same-site pages) stay in this WebView; off-site
+  // links go to the system browser.
+  const onShouldStart = (req: ShouldStartLoadRequest) => {
+    const url = req?.url || "";
+    if (!url) return true;
+    if (req.isTopFrame === false) return true;
+    if (isMapUrl(url)) {
+      router.push("/map");
+      return false;
+    }
+    if (isCourtsDirectoryUrl(url)) {
+      router.push("/courts");
+      return false;
+    }
+    if (url.startsWith("about:") || url.includes(SITE_HOST)) return true;
+    if (/^https?:\/\//i.test(url) || /^(tel:|mailto:)/i.test(url)) {
+      Linking.openURL(url).catch(() => {});
+      return false;
+    }
+    return true;
+  };
+
   // If no URL, render nothing (or you can show an error screen)
   if (!safeUrl) return null;
 
@@ -69,6 +97,7 @@ export default function AppWebviewScreen() {
         source={{ uri: safeUrl }}
         style={styles.web}
         onNavigationStateChange={(navState) => setCanGoBack(Boolean(navState.canGoBack))}
+        onShouldStartLoadWithRequest={onShouldStart}
         injectedJavaScript={injectedJS}
         geolocationEnabled
         domStorageEnabled

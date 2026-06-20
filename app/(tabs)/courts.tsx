@@ -25,10 +25,12 @@ import type {
 } from "react-native-webview/lib/WebViewTypes";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import * as Location from "expo-location";
 
 import { Colors, Fonts } from "@/constants/theme";
 import { apiUrl } from "../../src/api/base";
+import { isMapUrl } from "../../src/nav/links";
 
 const DIRECTORY_URL = apiUrl("/courts/?app=1");
 const SITE_HOST = "whatyoudink.com";
@@ -61,11 +63,22 @@ export default function CourtsScreen() {
     setCanGoBack(Boolean(nav.canGoBack));
   }, []);
 
-  // Keep whatyoudink.com pages inside the WebView; send everything else
-  // (YouTube, tel:, mailto:, other sites) to the system browser/dialer.
+  // Route in-page links to native screens where it matters; keep the directory
+  // and individual court pages inside this WebView (it IS the in-app directory).
   const onShouldStart = useCallback((req: ShouldStartLoadRequest) => {
     const url = req.url || "";
+    if (!url) return true;
+    // Let iframes / sub-resource requests (embeds, analytics) load untouched.
+    if (req.isTopFrame === false) return true;
+
+    // "Open the map" / "View on map" → native Map tab, not the website map.
+    if (isMapUrl(url)) {
+      router.push("/map");
+      return false;
+    }
+    // Directory + court pages stay in the WebView (this is the app's directory).
     if (url.startsWith("about:") || url.includes(SITE_HOST)) return true;
+    // Anything off-site (YouTube, tel:, mailto:, etc.) → system browser/dialer.
     if (/^https?:\/\//i.test(url) || /^(tel:|mailto:)/i.test(url)) {
       Linking.openURL(url).catch(() => {});
       return false;
