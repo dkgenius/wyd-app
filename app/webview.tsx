@@ -6,7 +6,7 @@ import { WebView } from "react-native-webview";
 import type { ShouldStartLoadRequest } from "react-native-webview/lib/WebViewTypes";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { isMapUrl, isCourtsDirectoryUrl } from "../src/nav/links";
+import { isMapUrl, isCourtsDirectoryUrl, isSiteHomeUrl } from "../src/nav/links";
 
 const SITE_HOST = "whatyoudink.com";
 
@@ -58,6 +58,10 @@ export default function AppWebviewScreen() {
     const url = req?.url || "";
     if (!url) return true;
     if (req.isTopFrame === false) return true;
+    if (isSiteHomeUrl(url)) {
+      router.push("/");
+      return false;
+    }
     if (isMapUrl(url)) {
       router.push("/map");
       return false;

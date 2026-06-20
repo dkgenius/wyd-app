@@ -9,7 +9,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 
 import { Body, Muted } from "@/components/ui";
 import { Colors, Fonts, Radius, Spacing, TypeScale } from "@/constants/theme";
-import { isMapUrl, isCourtsDirectoryUrl } from "../../src/nav/links";
+import { isMapUrl, isCourtsDirectoryUrl, isSiteHomeUrl } from "../../src/nav/links";
 
 const SITE_HOST = "whatyoudink.com";
 
@@ -118,6 +118,10 @@ export default function BlogPostWebScreen() {
     const reqUrl = req?.url || "";
     if (!reqUrl) return true;
     if (req.isTopFrame === false) return true;
+    if (isSiteHomeUrl(reqUrl)) {
+      router.push("/");
+      return false;
+    }
     if (isMapUrl(reqUrl)) {
       router.push("/map");
       return false;

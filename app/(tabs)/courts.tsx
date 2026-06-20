@@ -30,7 +30,7 @@ import * as Location from "expo-location";
 
 import { Colors, Fonts } from "@/constants/theme";
 import { apiUrl } from "../../src/api/base";
-import { isMapUrl } from "../../src/nav/links";
+import { isMapUrl, isSiteHomeUrl } from "../../src/nav/links";
 
 const DIRECTORY_URL = apiUrl("/courts/?app=1");
 const SITE_HOST = "whatyoudink.com";
@@ -71,6 +71,11 @@ export default function CourtsScreen() {
     // Let iframes / sub-resource requests (embeds, analytics) load untouched.
     if (req.isTopFrame === false) return true;
 
+    // Breadcrumb "Home" → native Home tab, not the website homepage.
+    if (isSiteHomeUrl(url)) {
+      router.push("/");
+      return false;
+    }
     // "Open the map" / "View on map" → native Map tab, not the website map.
     if (isMapUrl(url)) {
       router.push("/map");
