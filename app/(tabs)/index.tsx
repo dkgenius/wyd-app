@@ -33,6 +33,7 @@ type ApiNearbyLocation = {
   id: number;
   slug?: string | null;
   court_url?: string | null;
+  featured_image_url?: string | null;
   name: string;
   city: string;
   state: string;
@@ -204,41 +205,43 @@ function NearbyCourtCard({
   const distance = fmtDistance(loc.distance_mi);
   const cityState = [loc.city, loc.state].filter(Boolean).join(", ");
   const courts = courtsText(loc.courts);
+  const imageUrl = loc.featured_image_url || null;
 
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [styles.courtCard, pressed && { opacity: 0.85 }]}
     >
-      <View style={styles.courtTop}>
-        <View style={styles.courtPin}>
-          <Ionicons name="location" size={16} color={Colors.ball} />
-        </View>
-        {distance ? <Text style={styles.courtDistance}>{distance}</Text> : null}
-      </View>
+      <View style={styles.courtImageWrap}>
+        {imageUrl ? (
+          <Image source={{ uri: imageUrl }} style={styles.courtImage} resizeMode="cover" />
+        ) : (
+          <View style={styles.courtImageFallback}>
+            <Ionicons name="location-outline" size={28} color={Colors.muted2} />
+          </View>
+        )}
 
-      <Title numberOfLines={2} style={styles.courtName}>
-        {loc.name}
-      </Title>
-
-      {cityState ? (
-        <Muted numberOfLines={1} style={styles.courtCity}>
-          {cityState}
-        </Muted>
-      ) : null}
-
-      <View style={styles.courtMetaRow}>
         {rating ? (
           <View style={styles.courtRatePill}>
             <Ionicons name="star" size={11} color={Colors.onBall} />
             <Text style={styles.courtRateText}>{rating}</Text>
           </View>
         ) : null}
-        {courts ? (
-          <Muted numberOfLines={1} style={styles.courtCountText}>
-            {courts}
-          </Muted>
+
+        {distance ? (
+          <View style={styles.courtDistPill}>
+            <Text style={styles.courtDistText}>{distance}</Text>
+          </View>
         ) : null}
+      </View>
+
+      <View style={styles.courtBody}>
+        <Title numberOfLines={2} style={styles.courtName}>
+          {loc.name}
+        </Title>
+        <Muted numberOfLines={1} style={styles.courtCity}>
+          {[cityState, courts].filter(Boolean).join(" · ")}
+        </Muted>
       </View>
     </Pressable>
   );
@@ -583,47 +586,32 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   courtCard: {
-    width: 220,
-    padding: Spacing.lg,
+    width: 230,
     borderRadius: Radius.lg,
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
+    overflow: "hidden",
   },
-  courtTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 10,
+  courtImageWrap: {
+    width: "100%",
+    aspectRatio: 16 / 10,
+    backgroundColor: Colors.surface2,
   },
-  courtPin: {
-    width: 30,
-    height: 30,
-    borderRadius: Radius.sm,
+  courtImage: {
+    width: "100%",
+    height: "100%",
+  },
+  courtImageFallback: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: Colors.ballDim,
-  },
-  courtDistance: {
-    fontFamily: Fonts.body.bold,
-    color: Colors.ball,
-    fontSize: TypeScale.bodySm,
-  },
-  courtName: {
-    fontSize: 18,
-    lineHeight: 22,
-  },
-  courtCity: {
-    marginTop: 4,
-    fontSize: TypeScale.bodySm,
-  },
-  courtMetaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    marginTop: 12,
+    backgroundColor: Colors.surface2,
   },
   courtRatePill: {
+    position: "absolute",
+    top: 10,
+    left: 10,
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
@@ -637,9 +625,30 @@ const styles = StyleSheet.create({
     color: Colors.onBall,
     fontSize: TypeScale.caption,
   },
-  courtCountText: {
-    flex: 1,
+  courtDistPill: {
+    position: "absolute",
+    bottom: 10,
+    left: 10,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: Radius.pill,
+    backgroundColor: "rgba(0,0,0,0.62)",
+  },
+  courtDistText: {
+    fontFamily: Fonts.body.extrabold,
+    color: Colors.ball,
     fontSize: TypeScale.caption,
+  },
+  courtBody: {
+    padding: Spacing.md,
+  },
+  courtName: {
+    fontSize: 17,
+    lineHeight: 21,
+  },
+  courtCity: {
+    marginTop: 4,
+    fontSize: TypeScale.bodySm,
   },
 
   /* Nearby review card */

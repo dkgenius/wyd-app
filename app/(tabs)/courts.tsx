@@ -5,8 +5,7 @@
 // chrome-free in app mode (wyd_is_app) and keeps ?app=1 on every internal link,
 // so browsing states → cities → individual courts all stays inside this tab.
 //
-// Distance/"nearby" in the directory uses navigator.geolocation, so we request
-// location permission on mount and enable geolocation in the WebView.
+// WebView config intentionally mirrors clinic.tsx (known-good in Expo Go).
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -19,7 +18,11 @@ import {
   Pressable,
   Linking,
 } from "react-native";
-import { WebView, WebViewNavigation } from "react-native-webview";
+import { WebView } from "react-native-webview";
+import type {
+  WebViewNavigation,
+  ShouldStartLoadRequest,
+} from "react-native-webview/lib/WebViewTypes";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
@@ -34,7 +37,6 @@ export default function CourtsScreen() {
   const insets = useSafeAreaInsets();
   const webRef = useRef<WebView>(null);
   const [canGoBack, setCanGoBack] = useState(false);
-  const [loading, setLoading] = useState(true);
 
   // Ask for location up front so the directory's "nearby" / distance works
   // inside the WebView (best-effort — denial just hides distances).
@@ -61,7 +63,7 @@ export default function CourtsScreen() {
 
   // Keep whatyoudink.com pages inside the WebView; send everything else
   // (YouTube, tel:, mailto:, other sites) to the system browser/dialer.
-  const onShouldStart = useCallback((req: { url: string }) => {
+  const onShouldStart = useCallback((req: ShouldStartLoadRequest) => {
     const url = req.url || "";
     if (url.startsWith("about:") || url.includes(SITE_HOST)) return true;
     if (/^https?:\/\//i.test(url) || /^(tel:|mailto:)/i.test(url)) {
@@ -78,12 +80,12 @@ export default function CourtsScreen() {
           <Pressable
             onPress={() => webRef.current?.goBack()}
             hitSlop={8}
-            style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
+            style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.6 }]}
           >
             <Ionicons name="chevron-back" size={22} color={Colors.text} />
           </Pressable>
         ) : (
-          <View style={styles.backBtn} />
+          <View style={styles.iconBtn} />
         )}
 
         <Text style={styles.title}>Courts</Text>
@@ -91,35 +93,33 @@ export default function CourtsScreen() {
         <Pressable
           onPress={() => webRef.current?.reload()}
           hitSlop={8}
-          style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
+          style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.6 }]}
         >
           <Ionicons name="refresh" size={19} color={Colors.muted} />
         </Pressable>
       </View>
 
-      <View style={styles.webWrap}>
+      <View style={{ flex: 1 }}>
         <WebView
           ref={webRef}
           source={{ uri: DIRECTORY_URL }}
-          style={styles.web}
           originWhitelist={["*"]}
           onNavigationStateChange={onNavChange}
           onShouldStartLoadWithRequest={onShouldStart}
-          onLoadEnd={() => setLoading(false)}
-          startInLoadingState={false}
           geolocationEnabled
           domStorageEnabled
-          allowsInlineMediaPlayback
-          allowsBackForwardNavigationGestures={Platform.OS === "ios"}
-          decelerationRate="normal"
-          setSupportMultipleWindows={false}
+          scrollEnabled
+          contentInsetAdjustmentBehavior="never"
+          automaticallyAdjustContentInsets={false}
+          contentInset={{ top: 0, left: 0, right: 0, bottom: 0 }}
+          style={{ flex: 1, backgroundColor: Colors.bg }}
+          startInLoadingState
+          renderLoading={() => (
+            <View style={[styles.loader, { paddingBottom: insets.bottom }]}>
+              <ActivityIndicator color={Colors.ball} />
+            </View>
+          )}
         />
-
-        {loading ? (
-          <View style={[styles.loader, { paddingBottom: insets.bottom }]}>
-            <ActivityIndicator color={Colors.ball} />
-          </View>
-        ) : null}
       </View>
     </SafeAreaView>
   );
@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
     backgroundColor: Colors.bg,
   },
-  backBtn: {
+  iconBtn: {
     width: 40,
     height: 40,
     alignItems: "center",
@@ -152,8 +152,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     textTransform: "uppercase",
   },
-  webWrap: { flex: 1, backgroundColor: Colors.bg },
-  web: { flex: 1, backgroundColor: Colors.bg },
   loader: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
