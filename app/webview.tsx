@@ -7,6 +7,7 @@ import type { ShouldStartLoadRequest } from "react-native-webview/lib/WebViewTyp
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { isMapUrl, isCourtsDirectoryUrl, isSiteHomeUrl } from "../src/nav/links";
+import { GEO_POLYFILL, useWebViewGeo } from "../src/nav/webviewGeo";
 
 const SITE_HOST = "whatyoudink.com";
 
@@ -14,6 +15,7 @@ export default function AppWebviewScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const webRef = useRef<WebView>(null);
+  const { pushCoords } = useWebViewGeo(webRef);
 
   const { url, title } = useLocalSearchParams<{ url?: string; title?: string }>();
 
@@ -103,7 +105,9 @@ export default function AppWebviewScreen() {
         onNavigationStateChange={(navState) => setCanGoBack(Boolean(navState.canGoBack))}
         onShouldStartLoadWithRequest={onShouldStart}
         injectedJavaScript={injectedJS}
-        geolocationEnabled
+        injectedJavaScriptBeforeContentLoaded={GEO_POLYFILL}
+        onLoadStart={pushCoords}
+        onLoadEnd={pushCoords}
         domStorageEnabled
         allowsBackForwardNavigationGestures={Platform.OS === "ios"}
       />

@@ -5,7 +5,9 @@
 // chrome-free in app mode (wyd_is_app) and keeps ?app=1 on every internal link,
 // so browsing states → cities → individual courts all stays inside this tab.
 //
-// WebView config intentionally mirrors clinic.tsx (known-good in Expo Go).
+// - Tapping the tab returns to the directory home (it doesn't keep your place).
+// - Location uses the app's existing permission via a polyfill, so the WebView
+//   never shows a second per-website location prompt on iOS.
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -25,26 +27,51 @@ import type {
 } from "react-native-webview/lib/WebViewTypes";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
-import * as Location from "expo-location";
+import { router, useNavigation, useFocusEffect } from "expo-router";
 
 import { Colors, Fonts } from "@/constants/theme";
 import { apiUrl } from "../../src/api/base";
 import { isMapUrl, isSiteHomeUrl } from "../../src/nav/links";
+import { GEO_POLYFILL, useWebViewGeo } from "../../src/nav/webviewGeo";
 
 const DIRECTORY_URL = apiUrl("/courts/?app=1");
 const SITE_HOST = "whatyoudink.com";
 
 export default function CourtsScreen() {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
   const webRef = useRef<WebView>(null);
   const [canGoBack, setCanGoBack] = useState(false);
+  const canGoBackRef = useRef(false);
+  const firstFocus = useRef(true);
+  // Remounting the WebView is the cleanest "back to home" — fresh load of the
+  // directory index with no leftover history.
+  const [reloadKey, setReloadKey] = useState(0);
 
-  // Ask for location up front so the directory's "nearby" / distance works
-  // inside the WebView (best-effort — denial just hides distances).
-  useEffect(() => {
-    Location.requestForegroundPermissionsAsync().catch(() => {});
+  const { pushCoords } = useWebViewGeo(webRef);
+
+  const resetToHome = useCallback(() => {
+    setReloadKey((k) => k + 1);
   }, []);
+
+  // Tapping the Courts tab while already on a deeper page → back to the home.
+  useEffect(() => {
+    const unsub = (navigation as any).addListener("tabPress", () => {
+      if ((navigation as any).isFocused?.() && canGoBackRef.current) resetToHome();
+    });
+    return unsub;
+  }, [navigation, resetToHome]);
+
+  // Entering the tab (switch or a "Browse all courts" push) → start at the home.
+  useFocusEffect(
+    useCallback(() => {
+      if (firstFocus.current) {
+        firstFocus.current = false;
+        return;
+      }
+      if (canGoBackRef.current) resetToHome();
+    }, [resetToHome])
+  );
 
   // Android hardware back navigates within the WebView before leaving the tab.
   useEffect(() => {
@@ -60,6 +87,7 @@ export default function CourtsScreen() {
   }, [canGoBack]);
 
   const onNavChange = useCallback((nav: WebViewNavigation) => {
+    canGoBackRef.current = Boolean(nav.canGoBack);
     setCanGoBack(Boolean(nav.canGoBack));
   }, []);
 
@@ -68,22 +96,17 @@ export default function CourtsScreen() {
   const onShouldStart = useCallback((req: ShouldStartLoadRequest) => {
     const url = req.url || "";
     if (!url) return true;
-    // Let iframes / sub-resource requests (embeds, analytics) load untouched.
-    if (req.isTopFrame === false) return true;
+    if (req.isTopFrame === false) return true; // iframes / sub-resources
 
-    // Breadcrumb "Home" → native Home tab, not the website homepage.
     if (isSiteHomeUrl(url)) {
       router.push("/");
       return false;
     }
-    // "Open the map" / "View on map" → native Map tab, not the website map.
     if (isMapUrl(url)) {
       router.push("/map");
       return false;
     }
-    // Directory + court pages stay in the WebView (this is the app's directory).
     if (url.startsWith("about:") || url.includes(SITE_HOST)) return true;
-    // Anything off-site (YouTube, tel:, mailto:, etc.) → system browser/dialer.
     if (/^https?:\/\//i.test(url) || /^(tel:|mailto:)/i.test(url)) {
       Linking.openURL(url).catch(() => {});
       return false;
@@ -109,7 +132,7 @@ export default function CourtsScreen() {
         <Text style={styles.title}>Courts</Text>
 
         <Pressable
-          onPress={() => webRef.current?.reload()}
+          onPress={resetToHome}
           hitSlop={8}
           style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.6 }]}
         >
@@ -119,12 +142,15 @@ export default function CourtsScreen() {
 
       <View style={{ flex: 1 }}>
         <WebView
+          key={reloadKey}
           ref={webRef}
           source={{ uri: DIRECTORY_URL }}
           originWhitelist={["*"]}
           onNavigationStateChange={onNavChange}
           onShouldStartLoadWithRequest={onShouldStart}
-          geolocationEnabled
+          injectedJavaScriptBeforeContentLoaded={GEO_POLYFILL}
+          onLoadStart={pushCoords}
+          onLoadEnd={pushCoords}
           domStorageEnabled
           scrollEnabled
           contentInsetAdjustmentBehavior="never"
