@@ -70,6 +70,8 @@ export default function AppWebviewScreen() {
         style={styles.web}
         onNavigationStateChange={(navState) => setCanGoBack(Boolean(navState.canGoBack))}
         injectedJavaScript={injectedJS}
+        geolocationEnabled
+        domStorageEnabled
         allowsBackForwardNavigationGestures={Platform.OS === "ios"}
       />
     </SafeAreaView>

@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Image,
   Linking,
+  ScrollView,
 } from "react-native";
 import * as Location from "expo-location";
 import { router } from "expo-router";
@@ -30,11 +31,14 @@ const API_BASE = "https://whatyoudink.com";
 
 type ApiNearbyLocation = {
   id: number;
+  slug?: string | null;
+  court_url?: string | null;
   name: string;
   city: string;
   state: string;
   distance_mi?: number | null;
   rating_overall?: number | null;
+  courts?: { indoor?: number | null; outdoor?: number | null } | null;
   blog?: {
     id: number | null;
     slug?: string | null;
@@ -61,6 +65,20 @@ function slugFromBlogUrl(url?: string | null): string | null {
 function fmtRating(r?: number | null) {
   if (typeof r !== "number" || Number.isNaN(r)) return null;
   return r.toFixed(1);
+}
+
+function fmtDistance(d?: number | null) {
+  if (typeof d !== "number" || Number.isNaN(d)) return null;
+  return (d < 10 ? d.toFixed(1) : Math.round(d).toString()) + " mi";
+}
+
+function courtsText(c?: { indoor?: number | null; outdoor?: number | null } | null) {
+  const indoor = Number(c?.indoor ?? 0);
+  const outdoor = Number(c?.outdoor ?? 0);
+  const parts: string[] = [];
+  if (indoor > 0) parts.push(`${indoor} indoor`);
+  if (outdoor > 0) parts.push(`${outdoor} outdoor`);
+  return parts.join(" · ");
 }
 
 /* ───────── Header: logo + socials ───────── */
@@ -174,6 +192,58 @@ function NearbyReviewCard({
   );
 }
 
+/* ───────── Nearby court card (compact, horizontal scroll) ───────── */
+function NearbyCourtCard({
+  loc,
+  onPress,
+}: {
+  loc: ApiNearbyLocation;
+  onPress: () => void;
+}) {
+  const rating = fmtRating(loc.rating_overall);
+  const distance = fmtDistance(loc.distance_mi);
+  const cityState = [loc.city, loc.state].filter(Boolean).join(", ");
+  const courts = courtsText(loc.courts);
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.courtCard, pressed && { opacity: 0.85 }]}
+    >
+      <View style={styles.courtTop}>
+        <View style={styles.courtPin}>
+          <Ionicons name="location" size={16} color={Colors.ball} />
+        </View>
+        {distance ? <Text style={styles.courtDistance}>{distance}</Text> : null}
+      </View>
+
+      <Title numberOfLines={2} style={styles.courtName}>
+        {loc.name}
+      </Title>
+
+      {cityState ? (
+        <Muted numberOfLines={1} style={styles.courtCity}>
+          {cityState}
+        </Muted>
+      ) : null}
+
+      <View style={styles.courtMetaRow}>
+        {rating ? (
+          <View style={styles.courtRatePill}>
+            <Ionicons name="star" size={11} color={Colors.onBall} />
+            <Text style={styles.courtRateText}>{rating}</Text>
+          </View>
+        ) : null}
+        {courts ? (
+          <Muted numberOfLines={1} style={styles.courtCountText}>
+            {courts}
+          </Muted>
+        ) : null}
+      </View>
+    </Pressable>
+  );
+}
+
 /* ───────── Explore destination card — typographic, no icon ─────────
  * Each card uses the brand's signature pattern: small caps eyebrow on top,
  * a single Bebas Neue display verb (with a ball-green accent word), and a
@@ -236,10 +306,34 @@ export default function HomeScreen() {
     [nearby]
   );
 
+  // Every nearby court (reviewed or not), closest first, for the side-scroll row.
+  const nearbyCourts = useMemo(
+    () =>
+      [...nearby]
+        .sort((a, b) => (a.distance_mi ?? 1e9) - (b.distance_mi ?? 1e9))
+        .slice(0, 12),
+    [nearby]
+  );
+
   const openBlogInApp = (loc: ApiNearbyLocation) => {
     const slug = loc.blog?.slug || slugFromBlogUrl(loc.blog?.url);
     if (!slug) return;
     router.push({ pathname: "/blog/[slug]", params: { slug } });
+  };
+
+  // Open the actual court page in a WebView (app=1 strips the web chrome);
+  // fall back to the Courts directory tab if we don't have a slug.
+  const openCourt = (loc: ApiNearbyLocation) => {
+    const path = loc.court_url || (loc.slug ? `/courts/${loc.slug}` : null);
+    if (path) {
+      const sep = path.includes("?") ? "&" : "?";
+      router.push({
+        pathname: "/webview",
+        params: { url: `${API_BASE}${path}${sep}app=1`, title: loc.name },
+      });
+    } else {
+      router.push("/courts");
+    }
   };
 
   async function load() {
@@ -264,7 +358,7 @@ export default function HomeScreen() {
         `${API_BASE}/api/v1/locations/nearby.php` +
         `?lat=${encodeURIComponent(lat)}` +
         `&lng=${encodeURIComponent(lng)}` +
-        `&radius=10`;
+        `&radius=25`;
 
       const res = await fetch(nearbyUrl);
       const json = await res.json();
@@ -318,6 +412,33 @@ export default function HomeScreen() {
     <Screen scroll refreshing={refreshing} onRefresh={onRefresh} paddingBottom={48}>
       <BrandHeader />
       <Hero />
+
+      {/* Nearby Courts — side-scrolling so it doesn't push the page down */}
+      {(loading || nearbyCourts.length > 0) && (
+        <Section
+          title="Nearby Courts"
+          onSeeAll={() => router.push("/courts")}
+          seeAllLabel="Browse all"
+        >
+          {loading ? (
+            <View style={styles.loadingBlock}>
+              <ActivityIndicator color={Colors.ball} />
+              <Muted style={{ marginTop: 10 }}>Finding courts near you…</Muted>
+            </View>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.hScroll}
+              contentContainerStyle={styles.hScrollContent}
+            >
+              {nearbyCourts.map((loc) => (
+                <NearbyCourtCard key={loc.id} loc={loc} onPress={() => openCourt(loc)} />
+              ))}
+            </ScrollView>
+          )}
+        </Section>
+      )}
 
       {/* Nearby Reviews */}
       <Section
@@ -450,6 +571,75 @@ const styles = StyleSheet.create({
   },
   errorCard: {
     padding: Spacing.lg,
+  },
+
+  /* Nearby Courts horizontal row */
+  hScroll: {
+    // Bleed past the screen gutter so cards scroll off the edge cleanly.
+    marginHorizontal: -Spacing.screenPadH,
+  },
+  hScrollContent: {
+    paddingHorizontal: Spacing.screenPadH,
+    gap: Spacing.md,
+  },
+  courtCard: {
+    width: 220,
+    padding: Spacing.lg,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  courtTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  courtPin: {
+    width: 30,
+    height: 30,
+    borderRadius: Radius.sm,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.ballDim,
+  },
+  courtDistance: {
+    fontFamily: Fonts.body.bold,
+    color: Colors.ball,
+    fontSize: TypeScale.bodySm,
+  },
+  courtName: {
+    fontSize: 18,
+    lineHeight: 22,
+  },
+  courtCity: {
+    marginTop: 4,
+    fontSize: TypeScale.bodySm,
+  },
+  courtMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginTop: 12,
+  },
+  courtRatePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.pill,
+    backgroundColor: Colors.ball,
+  },
+  courtRateText: {
+    fontFamily: Fonts.body.extrabold,
+    color: Colors.onBall,
+    fontSize: TypeScale.caption,
+  },
+  courtCountText: {
+    flex: 1,
+    fontSize: TypeScale.caption,
   },
 
   /* Nearby review card */
